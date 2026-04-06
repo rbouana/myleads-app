@@ -1,0 +1,324 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/constants/app_strings.dart';
+import '../../models/contact.dart';
+import '../../providers/contacts_provider.dart';
+
+class ContactsScreen extends ConsumerWidget {
+  const ContactsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(contactsProvider);
+    final contacts = state.filteredContacts;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Column(
+        children: [
+          // Header
+          Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 10,
+              left: 24,
+              right: 24,
+              bottom: 24,
+            ),
+            decoration: const BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(32),
+                bottomRight: Radius.circular(32),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${AppStrings.contacts} (${state.totalContacts})',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Search Bar
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.search, color: Colors.white.withValues(alpha: 0.4), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          onChanged: (v) =>
+                              ref.read(contactsProvider.notifier).setSearchQuery(v),
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: AppStrings.searchContact,
+                            hintStyle: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              fontSize: 14,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Filter Chips
+          SizedBox(
+            height: 56,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              children: [
+                _buildChip(context, ref, AppStrings.all, 'all', state.activeFilter),
+                _buildChip(context, ref, 'Hot', 'hot', state.activeFilter),
+                _buildChip(context, ref, 'Warm', 'warm', state.activeFilter),
+                _buildChip(context, ref, 'Cold', 'cold', state.activeFilter),
+                _buildChip(context, ref, 'Tech', 'tech', state.activeFilter),
+                _buildChip(context, ref, 'Event', 'event', state.activeFilter),
+              ],
+            ),
+          ),
+
+          // Contacts List
+          Expanded(
+            child: contacts.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person_search,
+                            size: 64, color: AppColors.textLight.withValues(alpha: 0.4)),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Aucun contact trouvé',
+                          style: TextStyle(
+                            color: AppColors.textMid,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    itemCount: contacts.length,
+                    itemBuilder: (context, index) {
+                      return _buildContactItem(context, contacts[index]);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChip(
+      BuildContext context, WidgetRef ref, String label, String value, String active) {
+    final isActive = active == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => ref.read(contactsProvider.notifier).setFilter(value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primary : AppColors.card,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isActive ? AppColors.primary : AppColors.border,
+              width: 2,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isActive ? Colors.white : AppColors.textMid,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContactItem(BuildContext context, Contact contact) {
+    final color = contact.avatarColor != null
+        ? Color(int.parse(contact.avatarColor!))
+        : AppColors.primary;
+
+    return GestureDetector(
+      onTap: () => context.push('/contact/${contact.id}'),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Avatar
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [color, color.withValues(alpha: 0.7)],
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Text(
+                  contact.initials,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    contact.fullName,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  if (contact.subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      contact.subtitle,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textMid),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _buildStatusBadge(contact.status),
+                      ...contact.tags.take(2).map((t) => Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Container(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                t,
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          )),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Quick actions
+            Column(
+              children: [
+                _buildMiniAction(Icons.phone, AppColors.success, () {}),
+                const SizedBox(height: 6),
+                _buildMiniAction(Icons.chat, const Color(0xFF25D366), () {}),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    Color color;
+    String label;
+    switch (status) {
+      case 'hot':
+        color = AppColors.hot;
+        label = 'HOT';
+        break;
+      case 'warm':
+        color = AppColors.warm;
+        label = 'WARM';
+        break;
+      default:
+        color = AppColors.cold;
+        label = 'COLD';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          color: color,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniAction(IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: color, size: 16),
+      ),
+    );
+  }
+}

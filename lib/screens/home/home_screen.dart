@@ -1,0 +1,830 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/constants/app_strings.dart';
+import '../../core/theme/app_colors.dart';
+import '../../models/contact.dart';
+import '../../providers/contacts_provider.dart';
+import '../../providers/reminders_provider.dart';
+
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final contactsState = ref.watch(contactsProvider);
+    final remindersState = ref.watch(remindersProvider);
+    final hotLeads = ref.watch(hotLeadsProvider);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Column(
+        children: [
+          // -- Header --
+          _Header(
+            notificationCount: 3,
+            onNotificationTap: () {},
+            onSearchTap: () => context.push('/contacts'),
+          ),
+
+          // -- Content --
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // CTA cards
+                  _CTARow(
+                    onScanTap: () => context.push('/scan'),
+                    onManualTap: () => context.push('/review'),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Stats row
+                  _StatsRow(
+                    totalContacts: contactsState.totalContacts,
+                    hotLeadsCount: contactsState.hotLeads,
+                    remindersCount: remindersState.todayReminders.length +
+                        remindersState.overdueReminders.length,
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Hot leads section
+                  _SectionHeader(
+                    title: AppStrings.hotLeads,
+                    icon: Icons.local_fire_department_rounded,
+                    iconColor: AppColors.hot,
+                    onViewAll: () => context.push('/contacts'),
+                  ),
+                  const SizedBox(height: 12),
+                  if (hotLeads.isEmpty)
+                    _EmptyPlaceholder(
+                      icon: Icons.local_fire_department_outlined,
+                      text: 'Aucun lead chaud pour le moment',
+                    )
+                  else
+                    ...hotLeads.take(3).map(
+                          (contact) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _HotLeadCard(
+                              contact: contact,
+                              onTap: () =>
+                                  context.push('/contact/${contact.id}'),
+                            ),
+                          ),
+                        ),
+                  const SizedBox(height: 28),
+
+                  // Reminders section
+                  _SectionHeader(
+                    title: AppStrings.reminders,
+                    icon: Icons.notifications_active_rounded,
+                    iconColor: AppColors.warm,
+                    onViewAll: () => context.push('/reminders'),
+                  ),
+                  const SizedBox(height: 12),
+                  _RemindersSummaryCard(
+                    todayCount: remindersState.todayReminders.length,
+                    overdueCount: remindersState.overdueReminders.length,
+                    completedCount: remindersState.completedReminders.length,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Header
+// ---------------------------------------------------------------------------
+
+class _Header extends StatelessWidget {
+  final int notificationCount;
+  final VoidCallback onNotificationTap;
+  final VoidCallback onSearchTap;
+
+  const _Header({
+    required this.notificationCount,
+    required this.onNotificationTap,
+    required this.onSearchTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, topPadding + 16, 20, 20),
+      decoration: const BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Greeting row
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${AppStrings.hello} R\u00e9gis \uD83D\uDC4B',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.white,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      AppStrings.slogan,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Notification bell
+              _NotificationBell(
+                count: notificationCount,
+                onTap: onNotificationTap,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Search bar
+          GestureDetector(
+            onTap: onSearchTap,
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: AppColors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.white.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.search_rounded,
+                    color: AppColors.white.withValues(alpha: 0.6),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    AppStrings.searchContact,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.white.withValues(alpha: 0.5),
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Notification bell with badge
+// ---------------------------------------------------------------------------
+
+class _NotificationBell extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _NotificationBell({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Stack(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.white.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.notifications_outlined,
+                color: AppColors.white,
+                size: 22,
+              ),
+            ),
+            if (count > 0)
+              Positioned(
+                top: 2,
+                right: 2,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: const BoxDecoration(
+                    color: AppColors.hot,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      count > 9 ? '9+' : count.toString(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CTA Row (Scanner + Ajouter)
+// ---------------------------------------------------------------------------
+
+class _CTARow extends StatelessWidget {
+  final VoidCallback onScanTap;
+  final VoidCallback onManualTap;
+
+  const _CTARow({required this.onScanTap, required this.onManualTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        // Scan card
+        Expanded(
+          child: _CTACard(
+            label: AppStrings.scanContact,
+            icon: Icons.document_scanner_rounded,
+            gradient: AppColors.accentGradient,
+            textColor: AppColors.white,
+            iconColor: AppColors.white,
+            onTap: onScanTap,
+          ),
+        ),
+        const SizedBox(width: 14),
+        // Manual card
+        Expanded(
+          child: _CTACard(
+            label: AppStrings.addManually,
+            icon: Icons.person_add_alt_1_rounded,
+            gradient: null,
+            backgroundColor: AppColors.card,
+            textColor: AppColors.textDark,
+            iconColor: AppColors.primary,
+            onTap: onManualTap,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CTACard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final LinearGradient? gradient;
+  final Color? backgroundColor;
+  final Color textColor;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  const _CTACard({
+    required this.label,
+    required this.icon,
+    this.gradient,
+    this.backgroundColor,
+    required this.textColor,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 110,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          color: gradient == null ? backgroundColor : null,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: (gradient != null ? AppColors.accent : AppColors.textDark)
+                  .withValues(alpha: 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: (gradient != null ? AppColors.white : AppColors.primary)
+                    .withValues(alpha: gradient != null ? 0.2 : 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+                height: 1.2,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stats Row
+// ---------------------------------------------------------------------------
+
+class _StatsRow extends StatelessWidget {
+  final int totalContacts;
+  final int hotLeadsCount;
+  final int remindersCount;
+
+  const _StatsRow({
+    required this.totalContacts,
+    required this.hotLeadsCount,
+    required this.remindersCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            label: AppStrings.contacts,
+            value: totalContacts.toString(),
+            icon: Icons.people_alt_rounded,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _StatCard(
+            label: 'Hot Leads',
+            value: hotLeadsCount.toString(),
+            icon: Icons.local_fire_department_rounded,
+            color: AppColors.hot,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _StatCard(
+            label: AppStrings.reminders,
+            value: remindersCount.toString(),
+            icon: Icons.notifications_active_rounded,
+            color: AppColors.warm,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 1),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textLight,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Section header
+// ---------------------------------------------------------------------------
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color iconColor;
+  final VoidCallback onViewAll;
+
+  const _SectionHeader({
+    required this.title,
+    required this.icon,
+    required this.iconColor,
+    required this.onViewAll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: iconColor, size: 20),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textDark,
+          ),
+        ),
+        const Spacer(),
+        GestureDetector(
+          onTap: onViewAll,
+          child: const Text(
+            AppStrings.viewAll,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.accent,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hot Lead Card
+// ---------------------------------------------------------------------------
+
+class _HotLeadCard extends StatelessWidget {
+  final Contact contact;
+  final VoidCallback onTap;
+
+  const _HotLeadCard({required this.contact, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.textDark.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Avatar with gradient
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: AppColors.avatarGradient(contact.status),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Text(
+                  contact.initials,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Name + company
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    contact.fullName,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (contact.subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      contact.subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textMid,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            // HOT badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.hot.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: AppColors.hot.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.local_fire_department_rounded,
+                    size: 12,
+                    color: AppColors.hot,
+                  ),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'HOT',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.hot,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textLight,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reminders Summary Card
+// ---------------------------------------------------------------------------
+
+class _RemindersSummaryCard extends StatelessWidget {
+  final int todayCount;
+  final int overdueCount;
+  final int completedCount;
+
+  const _RemindersSummaryCard({
+    required this.todayCount,
+    required this.overdueCount,
+    required this.completedCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.primaryDark, AppColors.primary],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ReminderStat(
+              label: AppStrings.todayReminders,
+              value: todayCount.toString(),
+              color: AppColors.white,
+              icon: Icons.today_rounded,
+            ),
+          ),
+          _VerticalDivider(),
+          Expanded(
+            child: _ReminderStat(
+              label: AppStrings.overdueReminders,
+              value: overdueCount.toString(),
+              color: AppColors.hotLight,
+              icon: Icons.warning_amber_rounded,
+            ),
+          ),
+          _VerticalDivider(),
+          Expanded(
+            child: _ReminderStat(
+              label: AppStrings.doneReminders,
+              value: completedCount.toString(),
+              color: AppColors.successLight,
+              icon: Icons.check_circle_outline_rounded,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReminderStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final IconData icon;
+
+  const _ReminderStat({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 22),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppColors.white.withValues(alpha: 0.65),
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+}
+
+class _VerticalDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 50,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      color: AppColors.white.withValues(alpha: 0.15),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Empty placeholder
+// ---------------------------------------------------------------------------
+
+class _EmptyPlaceholder extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _EmptyPlaceholder({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: AppColors.textLight, size: 36),
+          const SizedBox(height: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textLight,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
