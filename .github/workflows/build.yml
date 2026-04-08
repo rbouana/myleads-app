@@ -1,0 +1,126 @@
+name: Build My Leads APK & Web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+
+      - name: Generate platform files
+        run: |
+          flutter create --project-name myleads --org com.debouana --platforms android,ios,web .
+          flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Build Web
+        run: flutter build web --release --base-href "/myleads-app/"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: myleads-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: myleads-web
+          path: build/web/
+
+  release:
+    name: Create Release
+    needs: build-android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: myleads-release-apk
+          path: ./release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "My Leads v1.0.0 - Release"
+          body: |
+            ## My Leads v1.0.0
+
+            **Scannez. Connectez. Convertissez.**
+
+            Application mobile de gestion intelligente de contacts professionnels.
+
+            ### Fonctionnalites
+            - Scan carte de visite (OCR)
+            - QR Code & NFC
+            - Gestion contacts avec lead scoring (Hot/Warm/Cold)
+            - Rappels et follow-up intelligent
+            - Actions rapides : Appel, SMS, WhatsApp, Email
+            - Mode offline
+            - Forfaits Free / Premium (7.99EUR) / Business (11.99EUR)
+
+            ### Installation Android
+            1. Telechargez `MyLeads-v1.0.0.apk`
+            2. Activez "Sources inconnues" dans Parametres > Securite
+            3. Installez le fichier APK
+
+            ---
+            *Built by De Bouana*
+          files: |
+            ./release/app-release.apk
+          draft: false
+          prerelease: false
+
+  deploy-web:
+    name: Deploy Web to GitHub Pages
+    needs: build-android
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download Web build
+        uses: actions/download-artifact@v4
+        with:
+          name: myleads-web
+          path: ./web/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./web/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
