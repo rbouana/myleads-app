@@ -1,32 +1,14 @@
-import 'package:hive/hive.dart';
-
-part 'reminder.g.dart';
-
-@HiveType(typeId: 1)
-class Reminder extends HiveObject {
-  @HiveField(0)
+/// Reminder entity for the local SQLite database.
+class Reminder {
   final String id;
-
-  @HiveField(1)
   final String contactId;
-
-  @HiveField(2)
   String title;
-
-  @HiveField(3)
   String? description;
-
-  @HiveField(4)
   DateTime dueDate;
-
-  @HiveField(5)
   bool isCompleted;
-
-  @HiveField(6)
   String priority; // 'urgent', 'soon', 'later'
-
-  @HiveField(7)
   DateTime createdAt;
+  String ownerId;
 
   Reminder({
     required this.id,
@@ -37,10 +19,10 @@ class Reminder extends HiveObject {
     this.isCompleted = false,
     this.priority = 'soon',
     DateTime? createdAt,
+    this.ownerId = '',
   }) : createdAt = createdAt ?? DateTime.now();
 
-  bool get isOverdue =>
-      !isCompleted && dueDate.isBefore(DateTime.now());
+  bool get isOverdue => !isCompleted && dueDate.isBefore(DateTime.now());
 
   bool get isToday {
     final now = DateTime.now();
@@ -65,6 +47,7 @@ class Reminder extends HiveObject {
     DateTime? dueDate,
     bool? isCompleted,
     String? priority,
+    String? ownerId,
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -75,6 +58,7 @@ class Reminder extends HiveObject {
       isCompleted: isCompleted ?? this.isCompleted,
       priority: priority ?? this.priority,
       createdAt: createdAt,
+      ownerId: ownerId ?? this.ownerId,
     );
   }
 }

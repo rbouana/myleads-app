@@ -1,10 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+
 import '../models/contact.dart';
 import '../models/interaction.dart';
+import '../services/database_service.dart';
 import '../services/storage_service.dart';
 
 const _uuid = Uuid();
+
+/// Result of a contact mutation. [error] is null on success.
+class ContactResult {
+  final Contact? contact;
+  final String? error;
+  const ContactResult.success(this.contact) : error = null;
+  const ContactResult.failure(this.error) : contact = null;
+  bool get isSuccess => error == null;
+}
 
 class ContactsState {
   final List<Contact> contacts;
@@ -19,10 +30,12 @@ class ContactsState {
     this.isLoading = false,
   });
 
+  /// Returns contacts filtered by search query (name, company, role) AND
+  /// the active status/tag filter. Sorted hot → warm → cold then by date.
   List<Contact> get filteredContacts {
     var filtered = List<Contact>.from(contacts);
 
-    // Apply status/tag filter
+    // Status / tag filter
     if (activeFilter != 'all') {
       filtered = filtered.where((c) {
         if (c.status == activeFilter) return true;
@@ -31,18 +44,18 @@ class ContactsState {
       }).toList();
     }
 
-    // Apply search
+    // Search by name, company, or job title (role)
     if (searchQuery.isNotEmpty) {
       final q = searchQuery.toLowerCase();
       filtered = filtered.where((c) {
-        return c.fullName.toLowerCase().contains(q) ||
+        return c.firstName.toLowerCase().contains(q) ||
+            c.lastName.toLowerCase().contains(q) ||
+            c.fullName.toLowerCase().contains(q) ||
             (c.company?.toLowerCase().contains(q) ?? false) ||
-            (c.jobTitle?.toLowerCase().contains(q) ?? false) ||
-            c.tags.any((t) => t.toLowerCase().contains(q));
+            (c.jobTitle?.toLowerCase().contains(q) ?? false);
       }).toList();
     }
 
-    // Sort: hot first, then by date
     filtered.sort((a, b) {
       const priority = {'hot': 0, 'warm': 1, 'cold': 2};
       final cmp = (priority[a.status] ?? 2).compareTo(priority[b.status] ?? 2);
@@ -78,28 +91,45 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
     _loadContacts();
   }
 
-  void _loadContacts() {
-    final contacts = StorageService.getAllContacts();
+  String get _ownerId => StorageService.currentUserId;
+
+  Future<void> _loadContacts() async {
+    state = state.copyWith(isLoading: true);
+    if (_ownerId.isEmpty) {
+      state = state.copyWith(contacts: [], isLoading: false);
+      return;
+    }
+    final contacts = await StorageService.getAllContacts();
     if (contacts.isEmpty) {
-      _seedDemoData();
+      await _seedDemoData();
     } else {
-      state = state.copyWith(contacts: contacts);
+      state = state.copyWith(contacts: contacts, isLoading: false);
     }
   }
 
-  void _seedDemoData() {
+  /// Reloads contacts from disk (call after login).
+  Future<void> reload() => _loadContacts();
+
+  Future<void> _seedDemoData() async {
+    final ownerId = _ownerId;
+    if (ownerId.isEmpty) {
+      state = state.copyWith(contacts: [], isLoading: false);
+      return;
+    }
     final demoContacts = [
       Contact(
         id: _uuid.v4(),
+        ownerId: ownerId,
         firstName: 'Karen',
         lastName: 'Ambassa',
         jobTitle: 'CEO',
         company: 'GreenTech Cameroon',
-        phone: '+237 6 99 88 77 66',
+        phone: '+237699887766',
         email: 'karen@greentech.cm',
         source: 'Salon Luxembourg 2026',
         project: 'Partenariat Tech',
-        notes: 'Rencontrée au salon Luxembourg. Très intéressée par un partenariat technologique. Budget confirmé.',
+        notes:
+            'Rencontrée au salon Luxembourg. Très intéressée par un partenariat technologique.',
         tags: ['Tech', 'CEO', 'Event'],
         status: 'hot',
         avatarColor: '0xFFE74C3C',
@@ -108,15 +138,15 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
       ),
       Contact(
         id: _uuid.v4(),
+        ownerId: ownerId,
         firstName: 'Mike',
         lastName: 'Investor',
         jobTitle: 'Partner',
         company: 'TechFund Africa',
-        phone: '+352 621 123 456',
+        phone: '+352621123456',
         email: 'mike@techfund.africa',
         source: 'Networking Event',
         project: 'Investissement Seed',
-        notes: 'Intéressé par le financement de startups tech en Afrique centrale.',
         tags: ['Finance', 'Partner', 'Investor'],
         status: 'warm',
         avatarColor: '0xFFF39C12',
@@ -125,11 +155,12 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
       ),
       Contact(
         id: _uuid.v4(),
+        ownerId: ownerId,
         firstName: 'Thomas',
         lastName: 'Matouke',
         jobTitle: 'CTO',
         company: 'Digitech Solutions',
-        phone: '+237 6 55 44 33 22',
+        phone: '+237655443322',
         email: 'thomas@digitech.cm',
         source: 'Conférence IT',
         project: 'Intégration API',
@@ -141,11 +172,12 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
       ),
       Contact(
         id: _uuid.v4(),
+        ownerId: ownerId,
         firstName: 'Sophie',
         lastName: 'Nguema',
         jobTitle: 'Directrice Générale',
         company: 'MediaCorp Gabon',
-        phone: '+241 7 12 34 56',
+        phone: '+241712345600',
         email: 'sophie@mediacorp.ga',
         source: 'Salon Digital',
         tags: ['Media', 'Event'],
@@ -156,11 +188,12 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
       ),
       Contact(
         id: _uuid.v4(),
+        ownerId: ownerId,
         firstName: 'Pierre',
         lastName: 'Onana',
         jobTitle: 'Directeur Commercial',
         company: 'SNCI',
-        phone: '+237 6 77 66 55 44',
+        phone: '+237677665544',
         email: 'pierre.onana@snci.cm',
         project: 'Contrat B2B',
         tags: ['B2B', 'Priority'],
@@ -169,84 +202,18 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
         captureMethod: 'nfc',
         createdAt: DateTime.now().subtract(const Duration(days: 5)),
       ),
-      Contact(
-        id: _uuid.v4(),
-        firstName: 'Albright',
-        lastName: 'Munki',
-        jobTitle: 'Web Developer',
-        company: 'De Bouana',
-        phone: '+237 6 88 77 66 55',
-        email: 'albright@debouana.com',
-        tags: ['Tech', 'Team'],
-        status: 'cold',
-        avatarColor: '0xFF27AE60',
-        captureMethod: 'manual',
-        createdAt: DateTime.now().subtract(const Duration(days: 10)),
-      ),
-      Contact(
-        id: _uuid.v4(),
-        firstName: 'Sundar',
-        lastName: 'Pichai',
-        jobTitle: 'CEO',
-        company: 'Google / Alphabet',
-        email: 'contact@google.com',
-        source: 'Conférence I/O',
-        tags: ['Tech', 'CEO'],
-        status: 'warm',
-        avatarColor: '0xFF4285F4',
-        captureMethod: 'qr',
-        createdAt: DateTime.now().subtract(const Duration(days: 15)),
-      ),
-      Contact(
-        id: _uuid.v4(),
-        firstName: 'Strive',
-        lastName: 'Masiyiwa',
-        jobTitle: 'Founder',
-        company: 'Econet',
-        tags: ['Telecom', 'Investor'],
-        status: 'cold',
-        avatarColor: '0xFF1ABC9C',
-        captureMethod: 'manual',
-        createdAt: DateTime.now().subtract(const Duration(days: 20)),
-      ),
-      Contact(
-        id: _uuid.v4(),
-        firstName: 'Aiman',
-        lastName: 'Ezzat',
-        jobTitle: 'CEO',
-        company: 'Capgemini',
-        email: 'contact@capgemini.com',
-        tags: ['Consulting', 'Tech'],
-        status: 'warm',
-        avatarColor: '0xFF34495E',
-        captureMethod: 'scan',
-        createdAt: DateTime.now().subtract(const Duration(days: 25)),
-      ),
-      Contact(
-        id: _uuid.v4(),
-        firstName: 'Youssouf',
-        lastName: 'Labarang',
-        jobTitle: 'Directeur IT',
-        company: 'Ministère Finance',
-        phone: '+237 6 33 22 11 00',
-        source: 'Forum Gouvernemental',
-        tags: ['Gov', 'IT'],
-        status: 'hot',
-        avatarColor: '0xFFE67E22',
-        captureMethod: 'scan',
-        createdAt: DateTime.now().subtract(const Duration(days: 7)),
-      ),
     ];
 
-    for (final contact in demoContacts) {
-      StorageService.saveContact(contact);
+    for (final c in demoContacts) {
+      await DatabaseService.insertContact(c);
     }
 
-    // Seed some interactions for Karen
+    // Demo interactions for Karen
     final karenId = demoContacts[0].id;
     final interactions = [
       Interaction(
         id: _uuid.v4(),
+        ownerId: ownerId,
         contactId: karenId,
         type: 'meeting',
         content: 'Rencontre au Salon Luxembourg',
@@ -254,6 +221,7 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
       ),
       Interaction(
         id: _uuid.v4(),
+        ownerId: ownerId,
         contactId: karenId,
         type: 'call',
         content: 'Appel de suivi - 15 min',
@@ -261,6 +229,7 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
       ),
       Interaction(
         id: _uuid.v4(),
+        ownerId: ownerId,
         contactId: karenId,
         type: 'email',
         content: 'Email de proposition envoyé',
@@ -268,11 +237,11 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
       ),
     ];
 
-    for (final interaction in interactions) {
-      StorageService.saveInteraction(interaction);
+    for (final i in interactions) {
+      await DatabaseService.insertInteraction(i);
     }
 
-    state = state.copyWith(contacts: demoContacts);
+    state = state.copyWith(contacts: demoContacts, isLoading: false);
   }
 
   void setSearchQuery(String query) {
@@ -283,35 +252,124 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
     state = state.copyWith(activeFilter: filter);
   }
 
-  Future<Contact> addContact(Contact contact) async {
-    final newContact = contact.copyWith(id: _uuid.v4());
-    await StorageService.saveContact(newContact);
-    state = state.copyWith(
-      contacts: [...state.contacts, newContact],
-    );
-    return newContact;
+  // ============== VALIDATION ==============
+
+  /// Validates a contact against business rules:
+  /// - last name required
+  /// - phone OR email required
+  /// - no duplicate phone/email for the same owner
+  /// - no contact with same first+last+(phone or email)
+  String? _validateContact(Contact c) {
+    if (c.lastName.trim().isEmpty) {
+      return 'Le nom de famille est obligatoire';
+    }
+    final hasPhone = c.phone != null && c.phone!.trim().isNotEmpty;
+    final hasEmail = c.email != null && c.email!.trim().isNotEmpty;
+    if (!hasPhone && !hasEmail) {
+      return 'Au moins un numéro de téléphone ou un email est requis';
+    }
+    return null;
   }
 
-  Future<void> updateContact(Contact contact) async {
-    await StorageService.saveContact(contact);
-    final updated = state.contacts.map((c) {
-      return c.id == contact.id ? contact : c;
-    }).toList();
-    state = state.copyWith(contacts: updated);
+  // ============== CRUD ==============
+
+  Future<ContactResult> addContact(Contact contact) async {
+    final ownerId = _ownerId;
+    if (ownerId.isEmpty) {
+      return const ContactResult.failure('Vous devez être connecté');
+    }
+
+    final newContact = contact.copyWith(
+      id: _uuid.v4(),
+      ownerId: ownerId,
+    );
+
+    final validationErr = _validateContact(newContact);
+    if (validationErr != null) return ContactResult.failure(validationErr);
+
+    final conflict = await DatabaseService.findContactConflict(
+      ownerId: ownerId,
+      phone: newContact.phone,
+      email: newContact.email,
+    );
+    if (conflict != null) return ContactResult.failure(conflict);
+
+    final identical = await DatabaseService.hasIdenticalContact(
+      ownerId: ownerId,
+      firstName: newContact.firstName,
+      lastName: newContact.lastName,
+      phone: newContact.phone,
+      email: newContact.email,
+    );
+    if (identical) {
+      return const ContactResult.failure(
+          'Un contact identique (même nom et coordonnées) existe déjà');
+    }
+
+    await DatabaseService.insertContact(newContact);
+    state = state.copyWith(contacts: [...state.contacts, newContact]);
+    return ContactResult.success(newContact);
+  }
+
+  Future<ContactResult> updateContact(Contact contact) async {
+    final ownerId = _ownerId;
+    if (ownerId.isEmpty) {
+      return const ContactResult.failure('Vous devez être connecté');
+    }
+
+    final updated = contact.copyWith(ownerId: ownerId);
+    final validationErr = _validateContact(updated);
+    if (validationErr != null) return ContactResult.failure(validationErr);
+
+    final conflict = await DatabaseService.findContactConflict(
+      ownerId: ownerId,
+      phone: updated.phone,
+      email: updated.email,
+      excludeId: updated.id,
+    );
+    if (conflict != null) return ContactResult.failure(conflict);
+
+    final identical = await DatabaseService.hasIdenticalContact(
+      ownerId: ownerId,
+      firstName: updated.firstName,
+      lastName: updated.lastName,
+      phone: updated.phone,
+      email: updated.email,
+      excludeId: updated.id,
+    );
+    if (identical) {
+      return const ContactResult.failure(
+          'Un contact identique (même nom et coordonnées) existe déjà');
+    }
+
+    await DatabaseService.updateContact(updated);
+    final list = state.contacts.map((c) => c.id == updated.id ? updated : c).toList();
+    state = state.copyWith(contacts: list);
+    return ContactResult.success(updated);
   }
 
   Future<void> deleteContact(String id) async {
-    await StorageService.deleteContact(id);
+    await DatabaseService.deleteContact(id);
     state = state.copyWith(
       contacts: state.contacts.where((c) => c.id != id).toList(),
     );
   }
 
   Future<void> addInteraction(Interaction interaction) async {
-    await StorageService.saveInteraction(interaction);
-    // Update last contact date
+    final ownerId = _ownerId;
+    final i = interaction.ownerId.isEmpty
+        ? Interaction(
+            id: interaction.id,
+            ownerId: ownerId,
+            contactId: interaction.contactId,
+            type: interaction.type,
+            content: interaction.content,
+            createdAt: interaction.createdAt,
+          )
+        : interaction;
+    await DatabaseService.insertInteraction(i);
     final contact = state.contacts.firstWhere(
-      (c) => c.id == interaction.contactId,
+      (c) => c.id == i.contactId,
       orElse: () => throw Exception('Contact not found'),
     );
     await updateContact(
@@ -319,8 +377,8 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
     );
   }
 
-  List<Interaction> getInteractions(String contactId) {
-    return StorageService.getInteractionsForContact(contactId);
+  Future<List<Interaction>> getInteractions(String contactId) {
+    return DatabaseService.getInteractionsForContact(contactId);
   }
 }
 
@@ -336,8 +394,7 @@ final hotLeadsProvider = Provider<List<Contact>>((ref) {
     ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 });
 
-final contactByIdProvider =
-    Provider.family<Contact?, String>((ref, id) {
+final contactByIdProvider = Provider.family<Contact?, String>((ref, id) {
   final contacts = ref.watch(contactsProvider).contacts;
   try {
     return contacts.firstWhere((c) => c.id == id);

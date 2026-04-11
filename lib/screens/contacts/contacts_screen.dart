@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../models/contact.dart';
 import '../../providers/contacts_provider.dart';
+import '../../services/contact_actions.dart';
 
 class ContactsScreen extends ConsumerWidget {
   const ContactsScreen({super.key});
@@ -36,13 +37,32 @@ class ContactsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${AppStrings.contacts} (${state.totalContacts})',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${AppStrings.contacts} (${state.totalContacts})',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => context.push('/contact/new'),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.add,
+                            color: Colors.white, size: 22),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 // Search Bar
@@ -163,13 +183,13 @@ class ContactsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildContactItem(BuildContext context, Contact contact) {
+  Widget _buildContactItem(BuildContext ctx, Contact contact) {
     final color = contact.avatarColor != null
         ? Color(int.parse(contact.avatarColor!))
         : AppColors.primary;
 
     return GestureDetector(
-      onTap: () => context.push('/contact/${contact.id}'),
+      onTap: () => ctx.push('/contact/${contact.id}'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
@@ -262,9 +282,17 @@ class ContactsScreen extends ConsumerWidget {
             // Quick actions
             Column(
               children: [
-                _buildMiniAction(Icons.phone, AppColors.success, () {}),
+                _buildMiniAction(
+                  Icons.phone,
+                  AppColors.success,
+                  () => ContactActions.call(ctx, contact),
+                ),
                 const SizedBox(height: 6),
-                _buildMiniAction(Icons.chat, const Color(0xFF25D366), () {}),
+                _buildMiniAction(
+                  Icons.chat,
+                  const Color(0xFF25D366),
+                  () => ContactActions.whatsapp(ctx, contact),
+                ),
               ],
             ),
           ],

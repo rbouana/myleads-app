@@ -1,59 +1,23 @@
-import 'package:hive/hive.dart';
-
-part 'contact.g.dart';
-
-@HiveType(typeId: 0)
-class Contact extends HiveObject {
-  @HiveField(0)
+/// Contact entity for the local SQLite database.
+class Contact {
   final String id;
-
-  @HiveField(1)
   String firstName;
-
-  @HiveField(2)
   String lastName;
-
-  @HiveField(3)
   String? jobTitle;
-
-  @HiveField(4)
   String? company;
-
-  @HiveField(5)
   String? phone;
-
-  @HiveField(6)
   String? email;
-
-  @HiveField(7)
   String? source;
-
-  @HiveField(8)
   String? project;
-
-  @HiveField(9)
   String? interest;
-
-  @HiveField(10)
   String? notes;
-
-  @HiveField(11)
   List<String> tags;
-
-  @HiveField(12)
-  String status; // 'hot', 'warm', 'cold'
-
-  @HiveField(13)
+  String status; // 'hot' | 'warm' | 'cold'
   DateTime createdAt;
-
-  @HiveField(14)
   DateTime? lastContactDate;
-
-  @HiveField(15)
   String? avatarColor;
-
-  @HiveField(16)
-  String captureMethod; // 'scan', 'qr', 'nfc', 'manual'
+  String captureMethod; // 'scan' | 'qr' | 'nfc' | 'manual'
+  String ownerId; // foreign key to UserAccount.id
 
   Contact({
     required this.id,
@@ -73,10 +37,11 @@ class Contact extends HiveObject {
     this.lastContactDate,
     this.avatarColor,
     this.captureMethod = 'manual',
+    this.ownerId = '',
   })  : tags = tags ?? [],
         createdAt = createdAt ?? DateTime.now();
 
-  String get fullName => '$firstName $lastName';
+  String get fullName => '$firstName $lastName'.trim();
 
   String get initials {
     final f = firstName.isNotEmpty ? firstName[0].toUpperCase() : '';
@@ -109,6 +74,7 @@ class Contact extends HiveObject {
     DateTime? lastContactDate,
     String? avatarColor,
     String? captureMethod,
+    String? ownerId,
   }) {
     return Contact(
       id: id ?? this.id,
@@ -128,6 +94,7 @@ class Contact extends HiveObject {
       lastContactDate: lastContactDate ?? this.lastContactDate,
       avatarColor: avatarColor ?? this.avatarColor,
       captureMethod: captureMethod ?? this.captureMethod,
+      ownerId: ownerId ?? this.ownerId,
     );
   }
 
@@ -149,6 +116,7 @@ class Contact extends HiveObject {
         'lastContactDate': lastContactDate?.toIso8601String(),
         'avatarColor': avatarColor,
         'captureMethod': captureMethod,
+        'ownerId': ownerId,
       };
 
   factory Contact.fromJson(Map<String, dynamic> json) => Contact(
@@ -171,5 +139,6 @@ class Contact extends HiveObject {
             : null,
         avatarColor: json['avatarColor'] as String?,
         captureMethod: json['captureMethod'] as String? ?? 'manual',
+        ownerId: json['ownerId'] as String? ?? '',
       );
 }

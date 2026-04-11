@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/contacts_provider.dart';
+import '../../providers/reminders_provider.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -16,8 +18,10 @@ class SignupScreen extends ConsumerStatefulWidget {
 class _SignupScreenState extends ConsumerState<SignupScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
@@ -55,8 +59,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
   @override
   void dispose() {
     _animController.dispose();
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -66,13 +72,37 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
     if (!_formKey.currentState!.validate()) return;
 
     final success = await ref.read(authProvider.notifier).signup(
-          _nameController.text.trim(),
-          _emailController.text.trim(),
-          _passwordController.text,
+          firstName: _firstNameController.text.trim(),
+          lastName: _lastNameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          phone: _phoneController.text.trim().isEmpty
+              ? null
+              : _phoneController.text.trim(),
         );
 
     if (success && mounted) {
-      context.go('/main');
+      await ref.read(contactsProvider.notifier).reload();
+      await ref.read(remindersProvider.notifier).reload();
+      if (mounted) context.go('/main');
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    final success = await ref.read(authProvider.notifier).signInWithGoogle();
+    if (success && mounted) {
+      await ref.read(contactsProvider.notifier).reload();
+      await ref.read(remindersProvider.notifier).reload();
+      if (mounted) context.go('/main');
+    }
+  }
+
+  Future<void> _handleAppleSignIn() async {
+    final success = await ref.read(authProvider.notifier).signInWithApple();
+    if (success && mounted) {
+      await ref.read(contactsProvider.notifier).reload();
+      await ref.read(remindersProvider.notifier).reload();
+      if (mounted) context.go('/main');
     }
   }
 
@@ -88,13 +118,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
           return SingleChildScrollView(
             child: Column(
               children: [
-                // Header section
                 Transform.translate(
                   offset: Offset(0, _headerSlide.value),
                   child: _buildHeader(),
                 ),
-
-                // Form section
                 Opacity(
                   opacity: _formFade.value,
                   child: Transform.translate(
@@ -113,7 +140,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      height: 280,
+      height: 250,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -134,7 +161,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 4),
-              // Back button
               GestureDetector(
                 onTap: () => context.pop(),
                 child: Container(
@@ -153,21 +179,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               const Text(
                 AppStrings.signup,
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 30,
                   fontWeight: FontWeight.w800,
                   color: AppColors.white,
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 'Rejoignez My Leads et commencez\nà convertir vos contacts.',
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: AppColors.white.withOpacity(0.7),
                   height: 1.4,
@@ -182,13 +208,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
 
   Widget _buildForm(AuthState authState) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 30, 24, 24),
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Error message
             if (authState.error != null) ...[
               Container(
                 padding: const EdgeInsets.all(14),
@@ -220,11 +245,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
               const SizedBox(height: 20),
             ],
 
-            // Name field
-            _buildInputLabel(AppStrings.fullName),
+            // First name
+            _buildInputLabel('Prénom'),
             const SizedBox(height: 8),
             TextFormField(
-              controller: _nameController,
+              controller: _firstNameController,
               keyboardType: TextInputType.name,
               textInputAction: TextInputAction.next,
               textCapitalization: TextCapitalization.words,
@@ -234,7 +259,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                 color: AppColors.textDark,
               ),
               decoration: InputDecoration(
-                hintText: 'Jean Dupont',
+                hintText: 'Jean',
                 prefixIcon: Icon(
                   Icons.person_outline_rounded,
                   color: AppColors.textLight.withOpacity(0.7),
@@ -243,18 +268,46 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Veuillez entrer votre nom';
-                }
-                if (value.trim().length < 2) {
-                  return 'Le nom doit contenir au moins 2 caractères';
+                  return 'Veuillez entrer votre prénom';
                 }
                 return null;
               },
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Email field
+            // Last name
+            _buildInputLabel('Nom'),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _lastNameController,
+              keyboardType: TextInputType.name,
+              textInputAction: TextInputAction.next,
+              textCapitalization: TextCapitalization.words,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textDark,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Dupont',
+                prefixIcon: Icon(
+                  Icons.badge_outlined,
+                  color: AppColors.textLight.withOpacity(0.7),
+                  size: 20,
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Veuillez entrer votre nom';
+                }
+                return null;
+              },
+            ),
+
+            const SizedBox(height: 16),
+
+            // Email
             _buildInputLabel(AppStrings.email),
             const SizedBox(height: 8),
             TextFormField(
@@ -285,14 +338,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
               },
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Password field
-            _buildInputLabel(AppStrings.password),
+            // Phone (optional but enforced unique if provided)
+            _buildInputLabel('Téléphone (optionnel)'),
             const SizedBox(height: 8),
             TextFormField(
-              controller: _passwordController,
-              obscureText: _obscurePassword,
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
               textInputAction: TextInputAction.next,
               style: const TextStyle(
                 fontSize: 15,
@@ -300,7 +353,32 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                 color: AppColors.textDark,
               ),
               decoration: InputDecoration(
-                hintText: '••••••••',
+                hintText: '+237 6 99 88 77 66',
+                prefixIcon: Icon(
+                  Icons.phone_outlined,
+                  color: AppColors.textLight.withOpacity(0.7),
+                  size: 20,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Password
+            _buildInputLabel(AppStrings.password),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              textInputAction: TextInputAction.next,
+              maxLength: 15,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textDark,
+              ),
+              decoration: InputDecoration(
+                hintText: '8-15 caractères, lettre + chiffre + symbole',
                 prefixIcon: Icon(
                   Icons.lock_outline_rounded,
                   color: AppColors.textLight.withOpacity(0.7),
@@ -325,22 +403,36 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                 if (value == null || value.isEmpty) {
                   return 'Veuillez entrer un mot de passe';
                 }
-                if (value.length < 6) {
-                  return 'Le mot de passe doit contenir au moins 6 caractères';
+                if (value.length < 8 || value.length > 15) {
+                  return 'Le mot de passe doit contenir entre 8 et 15 caractères';
+                }
+                if (value.contains(RegExp(r'\s'))) {
+                  return 'Le mot de passe ne doit pas contenir d\'espaces';
+                }
+                if (!value.contains(RegExp(r'[A-Za-z]'))) {
+                  return 'Le mot de passe doit contenir au moins une lettre';
+                }
+                if (!value.contains(RegExp(r'[0-9]'))) {
+                  return 'Le mot de passe doit contenir au moins un chiffre';
+                }
+                if (!value.contains(
+                    RegExp(r'''[!@#\$%^&*(),.?":{}|<>_\-+=\[\]\\/~`;]'''))) {
+                  return 'Le mot de passe doit contenir au moins un symbole';
                 }
                 return null;
               },
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
 
-            // Confirm password field
+            // Confirm password
             _buildInputLabel(AppStrings.confirmPassword),
             const SizedBox(height: 8),
             TextFormField(
               controller: _confirmPasswordController,
               obscureText: _obscureConfirmPassword,
               textInputAction: TextInputAction.done,
+              maxLength: 15,
               onFieldSubmitted: (_) => _handleSignup(),
               style: const TextStyle(
                 fontSize: 15,
@@ -348,7 +440,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                 color: AppColors.textDark,
               ),
               decoration: InputDecoration(
-                hintText: '••••••••',
+                hintText: 'Répétez le mot de passe',
                 prefixIcon: Icon(
                   Icons.lock_outline_rounded,
                   color: AppColors.textLight.withOpacity(0.7),
@@ -380,32 +472,27 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
               },
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
 
-            // Signup button
             _buildAccentButton(
               label: AppStrings.signup,
               isLoading: authState.isLoading,
               onPressed: _handleSignup,
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
 
-            // Divider
             _buildOrDivider(),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
 
-            // Social login buttons
             Row(
               children: [
                 Expanded(
                   child: _buildSocialButton(
                     label: 'Google',
                     icon: Icons.g_mobiledata_rounded,
-                    onPressed: () {
-                      // TODO: Google sign up
-                    },
+                    onPressed: _handleGoogleSignIn,
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -413,17 +500,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                   child: _buildSocialButton(
                     label: 'Apple',
                     icon: Icons.apple_rounded,
-                    onPressed: () {
-                      // TODO: Apple sign up
-                    },
+                    onPressed: _handleAppleSignIn,
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 36),
+            const SizedBox(height: 28),
 
-            // Login link
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

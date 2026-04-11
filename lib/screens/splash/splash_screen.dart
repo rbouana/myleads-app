@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../providers/contacts_provider.dart';
+import '../../providers/reminders_provider.dart';
+import '../../services/storage_service.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _loaderController;
 
@@ -27,8 +31,14 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 2200),
     )..forward();
 
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) {
+    Future.delayed(const Duration(milliseconds: 2500), () async {
+      if (!mounted) return;
+      // If a session was restored during StorageService.init(), skip login.
+      if (StorageService.isLoggedIn) {
+        await ref.read(contactsProvider.notifier).reload();
+        await ref.read(remindersProvider.notifier).reload();
+        if (mounted) context.go('/main');
+      } else {
         context.go('/login');
       }
     });

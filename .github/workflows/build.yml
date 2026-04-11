@@ -40,6 +40,9 @@ jobs:
           -dontwarn com.google.mlkit.**
           -keep class com.google.android.gms.** { *; }
           -dontwarn com.google.android.gms.**
+          -keep class io.flutter.plugins.** { *; }
+          -keep class androidx.security.crypto.** { *; }
+          -dontwarn androidx.security.crypto.**
           EOF
 
           # Patch build.gradle to use ProGuard rules in release
@@ -53,6 +56,65 @@ jobs:
           content = content.replace(old, new, 1)
           with open('android/app/build.gradle', 'w') as f:
               f.write(content)
+          PYEOF
+
+      - name: Patch AndroidManifest with intent queries
+        run: |
+          # url_launcher needs <queries> declaration on Android 11+
+          # Also need INTERNET for sign-in flows
+          python3 << 'PYEOF'
+          import re
+
+          path = 'android/app/src/main/AndroidManifest.xml'
+          with open(path, 'r') as f:
+              content = f.read()
+
+          # Add INTERNET permission (idempotent)
+          if 'android.permission.INTERNET' not in content:
+              content = content.replace(
+                  '<manifest',
+                  '<manifest',
+                  1,
+              )
+              # Insert permission right after <manifest ...>
+              content = re.sub(
+                  r'(<manifest[^>]*>)',
+                  r'\1\n    <uses-permission android:name="android.permission.INTERNET"/>',
+                  content,
+                  count=1,
+              )
+
+          # Inject <queries> block before </manifest>
+          queries_block = """
+              <queries>
+                  <intent>
+                      <action android:name="android.intent.action.VIEW" />
+                      <data android:scheme="tel" />
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.SENDTO" />
+                      <data android:scheme="sms" />
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.SENDTO" />
+                      <data android:scheme="mailto" />
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.VIEW" />
+                      <data android:scheme="https" />
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.VIEW" />
+                      <data android:scheme="http" />
+                  </intent>
+              </queries>
+          """
+          if '<queries>' not in content:
+              content = content.replace('</manifest>', queries_block + '</manifest>')
+
+          with open(path, 'w') as f:
+              f.write(content)
+          print('AndroidManifest.xml patched')
           PYEOF
 
       - name: Build APK

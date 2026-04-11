@@ -2,20 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../models/contact.dart';
 import '../../models/interaction.dart';
 import '../../providers/contacts_provider.dart';
+import '../../services/contact_actions.dart';
 
-class ContactDetailScreen extends ConsumerWidget {
+class ContactDetailScreen extends ConsumerStatefulWidget {
   final String contactId;
 
   const ContactDetailScreen({super.key, required this.contactId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final contact = ref.watch(contactByIdProvider(contactId));
+  ConsumerState<ContactDetailScreen> createState() =>
+      _ContactDetailScreenState();
+}
+
+class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
+  List<Interaction> _interactions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInteractions();
+  }
+
+  Future<void> _loadInteractions() async {
+    final list = await ref
+        .read(contactsProvider.notifier)
+        .getInteractions(widget.contactId);
+    if (mounted) setState(() => _interactions = list);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final contact = ref.watch(contactByIdProvider(widget.contactId));
 
     if (contact == null) {
       return Scaffold(
@@ -23,7 +46,8 @@ class ContactDetailScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: AppColors.textLight),
+              const Icon(Icons.error_outline,
+                  size: 48, color: AppColors.textLight),
               const SizedBox(height: 16),
               const Text('Contact non trouvé'),
               const SizedBox(height: 16),
@@ -40,7 +64,6 @@ class ContactDetailScreen extends ConsumerWidget {
     final avatarColor = contact.avatarColor != null
         ? Color(int.parse(contact.avatarColor!))
         : AppColors.primary;
-    final interactions = ref.read(contactsProvider.notifier).getInteractions(contactId);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -62,7 +85,6 @@ class ContactDetailScreen extends ConsumerWidget {
               ),
               child: Column(
                 children: [
-                  // Back button
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Row(
@@ -76,12 +98,13 @@ class ContactDetailScreen extends ConsumerWidget {
                               color: Colors.white.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                            child: const Icon(Icons.arrow_back,
+                                color: Colors.white, size: 20),
                           ),
                         ),
                         const Spacer(),
                         GestureDetector(
-                          onTap: () => _showDeleteDialog(context, ref, contact),
+                          onTap: () => _showActionsSheet(context, contact),
                           child: Container(
                             width: 40,
                             height: 40,
@@ -89,15 +112,14 @@ class ContactDetailScreen extends ConsumerWidget {
                               color: Colors.white.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                            child: const Icon(Icons.more_vert,
+                                color: Colors.white, size: 20),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Avatar
                   Container(
                     width: 80,
                     height: 80,
@@ -147,17 +169,86 @@ class ContactDetailScreen extends ConsumerWidget {
               ),
             ),
 
-            // Action Buttons
+            // Action Buttons (functional)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _buildActionBtn(context, Icons.phone, AppStrings.call, AppColors.success),
-                  _buildActionBtn(context, Icons.sms, AppStrings.sms, AppColors.primary),
-                  _buildActionBtn(context, Icons.chat, AppStrings.whatsapp, const Color(0xFF25D366)),
-                  _buildActionBtn(context, Icons.email, AppStrings.emailAction, AppColors.warm),
-                  _buildActionBtn(context, Icons.access_time, AppStrings.reminder, AppColors.accent),
+                  _buildActionBtn(
+                    icon: Icons.phone,
+                    label: AppStrings.call,
+                    color: AppColors.success,
+                    onTap: () => ContactActions.call(context, contact),
+                  ),
+                  _buildActionBtn(
+                    icon: Icons.sms,
+                    label: AppStrings.sms,
+                    color: AppColors.primary,
+                    onTap: () => ContactActions.sms(context, contact),
+                  ),
+                  _buildActionBtn(
+                    icon: Icons.chat,
+                    label: AppStrings.whatsapp,
+                    color: const Color(0xFF25D366),
+                    onTap: () => ContactActions.whatsapp(context, contact),
+                  ),
+                  _buildActionBtn(
+                    icon: Icons.email,
+                    label: AppStrings.emailAction,
+                    color: AppColors.warm,
+                    onTap: () => ContactActions.email(context, contact),
+                  ),
+                  _buildActionBtn(
+                    icon: Icons.share,
+                    label: 'Partager',
+                    color: AppColors.accent,
+                    onTap: () => ContactActions.share(context, contact),
+                  ),
+                ],
+              ),
+            ),
+
+            // Edit / Delete row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          context.push('/contact/${contact.id}/edit'),
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Modifier'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(
+                            color: AppColors.primary, width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _confirmDelete(context, contact),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Supprimer'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.hot,
+                        side:
+                            const BorderSide(color: AppColors.hot, width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -167,21 +258,26 @@ class ContactDetailScreen extends ConsumerWidget {
               AppStrings.information,
               Column(
                 children: [
-                  if (contact.phone != null) _infoRow('Téléphone', contact.phone!),
-                  if (contact.email != null) _infoRow('Email', contact.email!),
-                  if (contact.company != null) _infoRow('Société', contact.company!),
-                  if (contact.source != null) _infoRow('Source', contact.source!),
-                  if (contact.project != null) _infoRow('Projet', contact.project!),
+                  if (contact.phone != null && contact.phone!.isNotEmpty)
+                    _infoRow('Téléphone', contact.phone!),
+                  if (contact.email != null && contact.email!.isNotEmpty)
+                    _infoRow('Email', contact.email!),
+                  if (contact.company != null && contact.company!.isNotEmpty)
+                    _infoRow('Société', contact.company!),
+                  if (contact.source != null && contact.source!.isNotEmpty)
+                    _infoRow('Source', contact.source!),
+                  if (contact.project != null && contact.project!.isNotEmpty)
+                    _infoRow('Projet', contact.project!),
                 ],
               ),
             ),
 
             // History Section
-            if (interactions.isNotEmpty)
+            if (_interactions.isNotEmpty)
               _buildSection(
                 AppStrings.history,
                 Column(
-                  children: interactions.map((i) => _timelineItem(i)).toList(),
+                  children: _interactions.map(_timelineItem).toList(),
                 ),
               ),
 
@@ -198,49 +294,6 @@ class ContactDetailScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-
-            // Next Action
-            _buildSection(
-              AppStrings.nextAction,
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.access_time, color: AppColors.accent, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Envoyer proposition commerciale',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textDark,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Demain - 10:00',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.accent,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
             const SizedBox(height: 40),
           ],
@@ -283,16 +336,14 @@ class ContactDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildActionBtn(BuildContext context, IconData icon, String label, Color color) {
+  Widget _buildActionBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$label en cours...'),
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      },
+      onTap: onTap,
       child: Column(
         children: [
           Container(
@@ -365,7 +416,8 @@ class ContactDetailScreen extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textMid)),
+          Text(label,
+              style: const TextStyle(fontSize: 13, color: AppColors.textMid)),
           Flexible(
             child: Text(
               value,
@@ -419,12 +471,14 @@ class ContactDetailScreen extends ConsumerWidget {
               children: [
                 Text(
                   interaction.content,
-                  style: const TextStyle(fontSize: 13, color: AppColors.textDark),
+                  style: const TextStyle(
+                      fontSize: 13, color: AppColors.textDark),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  DateFormat('dd MMM yyyy', 'fr_FR').format(interaction.createdAt),
-                  style: const TextStyle(fontSize: 11, color: AppColors.textLight),
+                  DateFormat('dd MMM yyyy').format(interaction.createdAt),
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textLight),
                 ),
               ],
             ),
@@ -434,7 +488,7 @@ class ContactDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref, Contact contact) {
+  void _showActionsSheet(BuildContext context, Contact contact) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -457,20 +511,26 @@ class ContactDetailScreen extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.edit, color: AppColors.primary),
               title: const Text('Modifier'),
-              onTap: () => Navigator.pop(ctx),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/contact/${contact.id}/edit');
+              },
             ),
             ListTile(
               leading: const Icon(Icons.share, color: AppColors.primary),
               title: const Text('Partager'),
-              onTap: () => Navigator.pop(ctx),
+              onTap: () {
+                Navigator.pop(ctx);
+                ContactActions.share(context, contact);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.delete, color: AppColors.hot),
-              title: const Text('Supprimer', style: TextStyle(color: AppColors.hot)),
+              title: const Text('Supprimer',
+                  style: TextStyle(color: AppColors.hot)),
               onTap: () {
-                ref.read(contactsProvider.notifier).deleteContact(contact.id);
                 Navigator.pop(ctx);
-                context.pop();
+                _confirmDelete(context, contact);
               },
             ),
             SizedBox(height: MediaQuery.of(ctx).padding.bottom),
@@ -478,5 +538,73 @@ class ContactDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, Contact contact) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.hot.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: AppColors.hot,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Supprimer le contact ?',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Êtes-vous sûr de vouloir supprimer définitivement ${contact.fullName} ? Cette action est irréversible.',
+          style: const TextStyle(fontSize: 14, color: AppColors.textMid),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textMid,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.hot,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await ref.read(contactsProvider.notifier).deleteContact(contact.id);
+      if (mounted) context.pop();
+    }
   }
 }

@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/contacts_provider.dart';
+import '../../providers/reminders_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,7 +18,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'regis@debouana.com');
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
@@ -66,7 +68,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         );
 
     if (success && mounted) {
-      context.go('/main');
+      await ref.read(contactsProvider.notifier).reload();
+      await ref.read(remindersProvider.notifier).reload();
+      if (mounted) context.go('/main');
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    final success = await ref.read(authProvider.notifier).signInWithGoogle();
+    if (success && mounted) {
+      await ref.read(contactsProvider.notifier).reload();
+      await ref.read(remindersProvider.notifier).reload();
+      if (mounted) context.go('/main');
+    }
+  }
+
+  Future<void> _handleAppleSignIn() async {
+    final success = await ref.read(authProvider.notifier).signInWithApple();
+    if (success && mounted) {
+      await ref.read(contactsProvider.notifier).reload();
+      await ref.read(remindersProvider.notifier).reload();
+      if (mounted) context.go('/main');
     }
   }
 
@@ -278,12 +300,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   ),
                 ),
               ),
+              maxLength: 15,
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Veuillez entrer votre mot de passe';
-                }
-                if (value.length < 6) {
-                  return 'Le mot de passe doit contenir au moins 6 caractères';
                 }
                 return null;
               },
@@ -332,9 +352,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   child: _buildSocialButton(
                     label: 'Google',
                     icon: Icons.g_mobiledata_rounded,
-                    onPressed: () {
-                      // TODO: Google sign in
-                    },
+                    onPressed: _handleGoogleSignIn,
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -342,9 +360,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   child: _buildSocialButton(
                     label: 'Apple',
                     icon: Icons.apple_rounded,
-                    onPressed: () {
-                      // TODO: Apple sign in
-                    },
+                    onPressed: _handleAppleSignIn,
                   ),
                 ),
               ],

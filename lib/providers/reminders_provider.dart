@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+
 import '../models/reminder.dart';
+import '../services/database_service.dart';
 import '../services/storage_service.dart';
 
 const _uuid = Uuid();
@@ -55,20 +57,31 @@ class RemindersNotifier extends StateNotifier<RemindersState> {
     _loadReminders();
   }
 
-  void _loadReminders() {
-    final reminders = StorageService.getAllReminders();
+  String get _ownerId => StorageService.currentUserId;
+
+  Future<void> _loadReminders() async {
+    if (_ownerId.isEmpty) {
+      state = state.copyWith(reminders: []);
+      return;
+    }
+    final reminders = await StorageService.getAllReminders();
     if (reminders.isEmpty) {
-      _seedDemoData();
+      await _seedDemoData();
     } else {
       state = state.copyWith(reminders: reminders);
     }
   }
 
-  void _seedDemoData() {
+  Future<void> reload() => _loadReminders();
+
+  Future<void> _seedDemoData() async {
+    final ownerId = _ownerId;
+    if (ownerId.isEmpty) return;
     final now = DateTime.now();
     final demoReminders = [
       Reminder(
         id: _uuid.v4(),
+        ownerId: ownerId,
         contactId: '',
         title: 'Envoyer proposition commerciale',
         description: 'Karen Ambassa - GreenTech Cameroon',
@@ -77,6 +90,7 @@ class RemindersNotifier extends StateNotifier<RemindersState> {
       ),
       Reminder(
         id: _uuid.v4(),
+        ownerId: ownerId,
         contactId: '',
         title: 'Relance après meeting',
         description: 'Mike Investor - TechFund Africa',
@@ -85,32 +99,17 @@ class RemindersNotifier extends StateNotifier<RemindersState> {
       ),
       Reminder(
         id: _uuid.v4(),
+        ownerId: ownerId,
         contactId: '',
         title: 'Démo technique',
         description: 'Thomas Matouke - Digitech Solutions',
         dueDate: DateTime(now.year, now.month, now.day, 17, 0),
         priority: 'later',
       ),
-      Reminder(
-        id: _uuid.v4(),
-        contactId: '',
-        title: 'Suivi projet digital',
-        description: 'Sophie Nguema - MediaCorp Gabon',
-        dueDate: now.subtract(const Duration(days: 1)),
-        priority: 'urgent',
-      ),
-      Reminder(
-        id: _uuid.v4(),
-        contactId: '',
-        title: 'Contrat à finaliser',
-        description: 'Pierre Onana - SNCI',
-        dueDate: now.subtract(const Duration(days: 2)),
-        priority: 'urgent',
-      ),
     ];
 
     for (final r in demoReminders) {
-      StorageService.saveReminder(r);
+      await DatabaseService.insertReminder(r);
     }
     state = state.copyWith(reminders: demoReminders);
   }
@@ -120,27 +119,32 @@ class RemindersNotifier extends StateNotifier<RemindersState> {
   }
 
   Future<void> addReminder(Reminder reminder) async {
-    final newReminder = reminder.copyWith(id: _uuid.v4());
-    await StorageService.saveReminder(newReminder);
+    final newReminder = reminder.copyWith(
+      id: _uuid.v4(),
+      ownerId: _ownerId,
+    );
+    await DatabaseService.insertReminder(newReminder);
     state = state.copyWith(
       reminders: [...state.reminders, newReminder],
     );
   }
 
   Future<void> completeReminder(String id) async {
-    final updated = state.reminders.map((r) {
+    final updated = <Reminder>[];
+    for (final r in state.reminders) {
       if (r.id == id) {
-        final completed = r.copyWith(isCompleted: true);
-        StorageService.saveReminder(completed);
-        return completed;
+        final done = r.copyWith(isCompleted: true);
+        await DatabaseService.updateReminder(done);
+        updated.add(done);
+      } else {
+        updated.add(r);
       }
-      return r;
-    }).toList();
+    }
     state = state.copyWith(reminders: updated);
   }
 
   Future<void> deleteReminder(String id) async {
-    await StorageService.deleteReminder(id);
+    await DatabaseService.deleteReminder(id);
     state = state.copyWith(
       reminders: state.reminders.where((r) => r.id != id).toList(),
     );

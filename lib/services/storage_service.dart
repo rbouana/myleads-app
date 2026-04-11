@@ -1,87 +1,132 @@
-import 'package:hive_flutter/hive_flutter.dart';
-import '../models/contact.dart';
-import '../models/reminder.dart';
-import '../models/interaction.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../models/contact.dart';
+import '../models/interaction.dart';
+import '../models/reminder.dart';
+import '../models/user_account.dart';
+import 'database_service.dart';
+import 'encryption_service.dart';
+
+/// High-level storage facade combining secure key/value storage for
+/// session/preferences and the encrypted SQLite database for entities.
 class StorageService {
-  static const String contactsBox = 'contacts';
-  static const String remindersBox = 'reminders';
-  static const String interactionsBox = 'interactions';
-  static const String settingsBox = 'settings';
+  static const _secure = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
+
+  // Session keys
+  static const _kCurrentUserId = 'current_user_id';
+  static const _kCurrentSessionToken = 'current_session_token';
+  static const _kHasOnboarded = 'has_onboarded';
+  static const _kUserPlan = 'user_plan';
+
+  static UserAccount? _cachedUser;
 
   static Future<void> init() async {
-    await Hive.initFlutter();
+    await EncryptionService.init();
+    // Open the database eagerly so the first query is fast.
+    await DatabaseService.database;
 
-    Hive.registerAdapter(ContactAdapter());
-    Hive.registerAdapter(ReminderAdapter());
-    Hive.registerAdapter(InteractionAdapter());
-
-    await Hive.openBox<Contact>(contactsBox);
-    await Hive.openBox<Reminder>(remindersBox);
-    await Hive.openBox<Interaction>(interactionsBox);
-    await Hive.openBox(settingsBox);
+    // Load cached user if a session exists.
+    final userId = await _secure.read(key: _kCurrentUserId);
+    final token = await _secure.read(key: _kCurrentSessionToken);
+    if (userId != null && token != null) {
+      final user = await DatabaseService.findUserById(userId);
+      if (user != null && user.sessionToken == token) {
+        _cachedUser = user;
+      } else {
+        // Stale or invalidated session — wipe it.
+        await _secure.delete(key: _kCurrentUserId);
+        await _secure.delete(key: _kCurrentSessionToken);
+      }
+    }
   }
 
-  // Contacts
-  static Box<Contact> get contactsStore => Hive.box<Contact>(contactsBox);
+  // -------- Session --------
 
-  static List<Contact> getAllContacts() => contactsStore.values.toList();
+  static UserAccount? get currentUser => _cachedUser;
+  static bool get isLoggedIn => _cachedUser != null;
+  static String get currentUserId => _cachedUser?.id ?? '';
+  static String get userName => _cachedUser?.fullName ?? '';
+  static String get userEmail => _cachedUser?.email ?? '';
+
+  static Future<void> setCurrentSession(UserAccount user, String token) async {
+    _cachedUser = user.copyWith(sessionToken: token);
+    await _secure.write(key: _kCurrentUserId, value: user.id);
+    await _secure.write(key: _kCurrentSessionToken, value: token);
+  }
+
+  static Future<void> clearSession() async {
+    _cachedUser = null;
+    await _secure.delete(key: _kCurrentUserId);
+    await _secure.delete(key: _kCurrentSessionToken);
+  }
+
+  static Future<bool> get hasCompletedOnboarding async =>
+      (await _secure.read(key: _kHasOnboarded)) == 'true';
+
+  static Future<void> setHasCompletedOnboarding(bool value) async {
+    await _secure.write(key: _kHasOnboarded, value: value.toString());
+  }
+
+  static Future<String> get userPlan async =>
+      (await _secure.read(key: _kUserPlan)) ?? 'free';
+
+  static Future<void> setUserPlan(String plan) async {
+    await _secure.write(key: _kUserPlan, value: plan);
+  }
+
+  // -------- Contacts --------
+
+  static Future<List<Contact>> getAllContacts() async {
+    if (_cachedUser == null) return [];
+    return DatabaseService.getAllContactsForOwner(_cachedUser!.id);
+  }
 
   static Future<void> saveContact(Contact contact) async {
-    await contactsStore.put(contact.id, contact);
+    final existing = await DatabaseService.findContactById(contact.id);
+    if (existing == null) {
+      await DatabaseService.insertContact(contact);
+    } else {
+      await DatabaseService.updateContact(contact);
+    }
   }
 
   static Future<void> deleteContact(String id) async {
-    await contactsStore.delete(id);
+    await DatabaseService.deleteContact(id);
   }
 
-  static Contact? getContact(String id) => contactsStore.get(id);
+  // -------- Reminders --------
 
-  // Reminders
-  static Box<Reminder> get remindersStore => Hive.box<Reminder>(remindersBox);
-
-  static List<Reminder> getAllReminders() => remindersStore.values.toList();
+  static Future<List<Reminder>> getAllReminders() async {
+    if (_cachedUser == null) return [];
+    return DatabaseService.getAllRemindersForOwner(_cachedUser!.id);
+  }
 
   static Future<void> saveReminder(Reminder reminder) async {
-    await remindersStore.put(reminder.id, reminder);
+    final db = await DatabaseService.database;
+    final existing = await db.query('reminders',
+        where: 'id = ?', whereArgs: [reminder.id], limit: 1);
+    if (existing.isEmpty) {
+      await DatabaseService.insertReminder(reminder);
+    } else {
+      await DatabaseService.updateReminder(reminder);
+    }
   }
 
   static Future<void> deleteReminder(String id) async {
-    await remindersStore.delete(id);
+    await DatabaseService.deleteReminder(id);
   }
 
-  // Interactions
-  static Box<Interaction> get interactionsStore =>
-      Hive.box<Interaction>(interactionsBox);
+  // -------- Interactions --------
 
-  static List<Interaction> getInteractionsForContact(String contactId) {
-    return interactionsStore.values
-        .where((i) => i.contactId == contactId)
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  static Future<List<Interaction>> getInteractionsForContact(
+      String contactId) async {
+    return DatabaseService.getInteractionsForContact(contactId);
   }
 
   static Future<void> saveInteraction(Interaction interaction) async {
-    await interactionsStore.put(interaction.id, interaction);
+    await DatabaseService.insertInteraction(interaction);
   }
-
-  // Settings
-  static Box get settingsStore => Hive.box(settingsBox);
-
-  static bool get isLoggedIn => settingsStore.get('isLoggedIn', defaultValue: false);
-  static set isLoggedIn(bool value) => settingsStore.put('isLoggedIn', value);
-
-  static String get userName => settingsStore.get('userName', defaultValue: 'Régis Bouana');
-  static set userName(String value) => settingsStore.put('userName', value);
-
-  static String get userEmail => settingsStore.get('userEmail', defaultValue: 'regis@debouana.com');
-  static set userEmail(String value) => settingsStore.put('userEmail', value);
-
-  static bool get hasCompletedOnboarding =>
-      settingsStore.get('hasCompletedOnboarding', defaultValue: false);
-  static set hasCompletedOnboarding(bool value) =>
-      settingsStore.put('hasCompletedOnboarding', value);
-
-  static String get userPlan => settingsStore.get('userPlan', defaultValue: 'free');
-  static set userPlan(String value) => settingsStore.put('userPlan', value);
 }

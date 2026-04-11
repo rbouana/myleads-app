@@ -52,43 +52,64 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     super.dispose();
   }
 
+  String? _orNull(String value) => value.trim().isEmpty ? null : value.trim();
+
   Future<void> _saveContact({bool andContact = false}) async {
     final contact = Contact(
       id: const Uuid().v4(),
       firstName: _firstNameCtrl.text.trim(),
       lastName: _lastNameCtrl.text.trim(),
-      jobTitle: _jobTitleCtrl.text.trim(),
-      company: _companyCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
-      source: _sourceCtrl.text.trim(),
-      project: _projectCtrl.text.trim(),
-      notes: _notesCtrl.text.trim(),
+      jobTitle: _orNull(_jobTitleCtrl.text),
+      company: _orNull(_companyCtrl.text),
+      phone: _orNull(_phoneCtrl.text),
+      email: _orNull(_emailCtrl.text),
+      source: _orNull(_sourceCtrl.text),
+      project: _orNull(_projectCtrl.text),
+      notes: _orNull(_notesCtrl.text),
       tags: _selectedTags.toList(),
       status: 'warm',
       captureMethod: 'scan',
     );
 
-    await ref.read(contactsProvider.notifier).addContact(contact);
+    final result = await ref.read(contactsProvider.notifier).addContact(contact);
 
-    if (mounted) {
+    if (!mounted) return;
+
+    if (!result.isSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle, color: AppColors.accent, size: 20),
+              const Icon(Icons.error_outline, color: Colors.white, size: 20),
               const SizedBox(width: 10),
-              const Text(AppStrings.contactSaved),
+              Expanded(child: Text(result.error!)),
             ],
           ),
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppColors.hot,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      await Future.delayed(const Duration(milliseconds: 800));
-      if (mounted) context.go('/main');
+      return;
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: AppColors.accent, size: 20),
+            const SizedBox(width: 10),
+            const Text(AppStrings.contactSaved),
+          ],
+        ),
+        backgroundColor: AppColors.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) context.go('/main');
   }
 
   @override

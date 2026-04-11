@@ -5,14 +5,27 @@ import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/contacts_provider.dart';
+import '../../providers/reminders_provider.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
+
+  String _initialsFor(String name) {
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+    return (parts.first.characters.first + parts.last.characters.first)
+        .toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
     final contacts = ref.watch(contactsProvider);
+    final displayName = auth.userName.isEmpty ? 'Utilisateur' : auth.userName;
+    final displayEmail = auth.userEmail.isEmpty ? '—' : auth.userEmail;
+    final displayInitials = _initialsFor(displayName);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -46,10 +59,10 @@ class ProfileScreen extends ConsumerWidget {
                         width: 4,
                       ),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text(
-                        'RB',
-                        style: TextStyle(
+                        displayInitials,
+                        style: const TextStyle(
                           color: AppColors.primary,
                           fontSize: 36,
                           fontWeight: FontWeight.w800,
@@ -59,7 +72,7 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    auth.userName.isEmpty ? 'Régis Bouana' : auth.userName,
+                    displayName,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -68,7 +81,7 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    auth.userEmail.isEmpty ? 'regis@debouana.com' : auth.userEmail,
+                    displayEmail,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.5),
                       fontSize: 13,
@@ -83,7 +96,7 @@ class ProfileScreen extends ConsumerWidget {
                       Container(width: 1, height: 30, color: Colors.white.withOpacity(0.1)),
                       _statItem('${contacts.hotLeads}', 'Hot Leads'),
                       Container(width: 1, height: 30, color: Colors.white.withOpacity(0.1)),
-                      _statItem('95%', 'Scan OK'),
+                      _statItem('${contacts.warmLeads}', 'Warm'),
                     ],
                   ),
                 ],
@@ -150,9 +163,11 @@ class ProfileScreen extends ConsumerWidget {
                     AppStrings.logoutDesc,
                     AppColors.hot.withOpacity(0.1),
                     AppColors.hot,
-                    () {
-                      ref.read(authProvider.notifier).logout();
-                      context.go('/login');
+                    () async {
+                      await ref.read(authProvider.notifier).logout();
+                      await ref.read(contactsProvider.notifier).reload();
+                      await ref.read(remindersProvider.notifier).reload();
+                      if (context.mounted) context.go('/login');
                     },
                     isLogout: true,
                   ),

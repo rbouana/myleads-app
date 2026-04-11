@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/contact.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/contacts_provider.dart';
+import '../../providers/navigation_provider.dart';
 import '../../providers/reminders_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -25,7 +27,10 @@ class HomeScreen extends ConsumerWidget {
           _Header(
             notificationCount: 3,
             onNotificationTap: () {},
-            onSearchTap: () => context.push('/contacts'),
+            onSearchChanged: (q) =>
+                ref.read(contactsProvider.notifier).setSearchQuery(q),
+            onSearchSubmitted: () =>
+                ref.read(currentTabProvider.notifier).state = 1,
           ),
 
           // -- Content --
@@ -39,7 +44,7 @@ class HomeScreen extends ConsumerWidget {
                   // CTA cards
                   _CTARow(
                     onScanTap: () => context.push('/scan'),
-                    onManualTap: () => context.push('/review'),
+                    onManualTap: () => context.push('/contact/new'),
                   ),
                   const SizedBox(height: 24),
 
@@ -57,7 +62,8 @@ class HomeScreen extends ConsumerWidget {
                     title: AppStrings.hotLeads,
                     icon: Icons.local_fire_department_rounded,
                     iconColor: AppColors.hot,
-                    onViewAll: () => context.push('/contacts'),
+                    onViewAll: () =>
+                        ref.read(currentTabProvider.notifier).state = 1,
                   ),
                   const SizedBox(height: 12),
                   if (hotLeads.isEmpty)
@@ -83,7 +89,8 @@ class HomeScreen extends ConsumerWidget {
                     title: AppStrings.reminders,
                     icon: Icons.notifications_active_rounded,
                     iconColor: AppColors.warm,
-                    onViewAll: () => context.push('/reminders'),
+                    onViewAll: () =>
+                        ref.read(currentTabProvider.notifier).state = 3,
                   ),
                   const SizedBox(height: 12),
                   _RemindersSummaryCard(
@@ -105,20 +112,26 @@ class HomeScreen extends ConsumerWidget {
 // Header
 // ---------------------------------------------------------------------------
 
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   final int notificationCount;
   final VoidCallback onNotificationTap;
-  final VoidCallback onSearchTap;
+  final ValueChanged<String> onSearchChanged;
+  final VoidCallback onSearchSubmitted;
 
   const _Header({
     required this.notificationCount,
     required this.onNotificationTap,
-    required this.onSearchTap,
+    required this.onSearchChanged,
+    required this.onSearchSubmitted,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final topPadding = MediaQuery.of(context).padding.top;
+    final userName = ref.watch(
+        authProvider.select((s) => s.userName.isEmpty ? '' : s.userName));
+    final firstName =
+        userName.isEmpty ? '' : userName.split(' ').first;
 
     return Container(
       padding: EdgeInsets.fromLTRB(20, topPadding + 16, 20, 20),
@@ -131,7 +144,6 @@ class _Header extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Greeting row
           Row(
             children: [
               Expanded(
@@ -139,7 +151,9 @@ class _Header extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${AppStrings.hello} R\u00e9gis \uD83D\uDC4B',
+                      firstName.isEmpty
+                          ? '${AppStrings.hello} \uD83D\uDC4B'
+                          : '${AppStrings.hello} $firstName \uD83D\uDC4B',
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
@@ -159,7 +173,6 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              // Notification bell
               _NotificationBell(
                 count: notificationCount,
                 onTap: onNotificationTap,
@@ -168,37 +181,52 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // Search bar
-          GestureDetector(
-            onTap: onSearchTap,
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: AppColors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: AppColors.white.withOpacity(0.12),
-                ),
+          // Search bar (functional)
+          Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.white.withOpacity(0.12),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.search_rounded,
-                    color: AppColors.white.withOpacity(0.6),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    AppStrings.searchContact,
-                    style: TextStyle(
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.search_rounded,
+                  color: AppColors.white.withOpacity(0.6),
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    onChanged: onSearchChanged,
+                    onSubmitted: (_) => onSearchSubmitted(),
+                    textInputAction: TextInputAction.search,
+                    style: const TextStyle(
                       fontSize: 14,
-                      color: AppColors.white.withOpacity(0.5),
-                      fontWeight: FontWeight.w400,
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    cursorColor: AppColors.white,
+                    decoration: InputDecoration(
+                      hintText: AppStrings.searchContact,
+                      hintStyle: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.white.withOpacity(0.5),
+                        fontWeight: FontWeight.w400,
+                      ),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],

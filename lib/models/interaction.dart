@@ -1,23 +1,11 @@
-import 'package:hive/hive.dart';
-
-part 'interaction.g.dart';
-
-@HiveType(typeId: 2)
-class Interaction extends HiveObject {
-  @HiveField(0)
+/// Interaction entity for the local SQLite database.
+class Interaction {
   final String id;
-
-  @HiveField(1)
   final String contactId;
-
-  @HiveField(2)
   String type; // 'call', 'sms', 'whatsapp', 'email', 'meeting', 'note'
-
-  @HiveField(3)
   String content;
-
-  @HiveField(4)
   DateTime createdAt;
+  String ownerId;
 
   Interaction({
     required this.id,
@@ -25,6 +13,7 @@ class Interaction extends HiveObject {
     required this.type,
     required this.content,
     DateTime? createdAt,
+    this.ownerId = '',
   }) : createdAt = createdAt ?? DateTime.now();
 
   String get typeIcon {

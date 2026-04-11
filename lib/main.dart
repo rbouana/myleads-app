@@ -22,7 +22,7 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Initialize Hive storage
+  // Initialize encrypted SQLite storage and restore session if any
   await StorageService.init();
 
   runApp(const ProviderScope(child: MyLeadsApp()));
