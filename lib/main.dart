@@ -8,7 +8,7 @@ import 'services/storage_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set system UI
+  // System chrome calls are no-ops on web; safe to call unconditionally.
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
@@ -16,14 +16,20 @@ void main() async {
     systemNavigationBarIconBrightness: Brightness.dark,
   ));
 
-  // Lock to portrait
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Initialize encrypted SQLite storage and restore session if any
-  await StorageService.init();
+  // Initialize encrypted SQLite storage and restore session if any.
+  // Wrapped in a guard so the app still boots if a platform-specific
+  // backend (e.g. browser IndexedDB) fails — we'd rather show the UI
+  // in a degraded state than a permanently white page.
+  try {
+    await StorageService.init();
+  } catch (e, st) {
+    debugPrint('StorageService.init failed: $e\n$st');
+  }
 
   runApp(const ProviderScope(child: MyLeadsApp()));
 }

@@ -120,6 +120,9 @@ jobs:
       - name: Build APK
         run: flutter build apk --release --no-tree-shake-icons
 
+      - name: Install sqflite web WASM into web/
+        run: dart run sqflite_common_ffi_web:setup
+
       - name: Build Web
         run: flutter build web --release --base-href "/myleads-app/"
 

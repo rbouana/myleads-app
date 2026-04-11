@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show Platform;
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -13,6 +13,8 @@ import '../models/reminder.dart';
 import '../models/user_account.dart';
 import '../core/utils/validators.dart';
 import 'encryption_service.dart';
+import 'web_db_factory_stub.dart'
+    if (dart.library.html) 'web_db_factory_web.dart';
 
 /// Local SQLite database service.
 ///
@@ -32,9 +34,20 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     if (kIsWeb) {
-      // Web fallback uses sqflite_common_ffi web shim - keep simple in-memory
-      databaseFactory = databaseFactoryFfi;
-    } else if (Platform.isWindows || Platform.isLinux) {
+      // Browser: SQLite via WASM, persisted in IndexedDB.
+      // No filesystem path needed — the database name acts as the key.
+      final webFactory = getWebDatabaseFactory();
+      if (webFactory != null) {
+        databaseFactory = webFactory;
+      }
+      return openDatabase(
+        _dbName,
+        version: _dbVersion,
+        onCreate: _onCreate,
+      );
+    }
+
+    if (Platform.isWindows || Platform.isLinux) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
