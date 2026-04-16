@@ -139,4 +139,50 @@ class AppStrings {
   static const String filterByTag = 'Tag';
   static const String filterByProject = 'Projet';
   static const String filterByPriority = 'Priorité';
+
+  // Password Recovery
+  static const String forgotPasswordTitle = 'Mot de passe oublié';
+  static const String forgotPasswordSubtitle = 'Entrez l\'email lié à votre compte';
+  static const String sendCode = 'Envoyer le code';
+  static const String backToLogin = 'Retour à la connexion';
+  static const String recoveryCodeTitle = 'Code de vérification';
+  static const String recoveryCodeSent = 'Un code de récupération a été envoyé à';
+  static const String resendCode = 'Renvoyer le code';
+  static const String resendCodeIn = 'Renvoyer le code dans';
+  static const String verify = 'Vérifier';
+  static const String newPasswordTitle = 'Nouveau mot de passe';
+  static const String newPasswordSubtitle = 'Créez un nouveau mot de passe sécurisé';
+  static const String newPassword = 'Nouveau mot de passe';
+  static const String confirmNewPassword = 'Confirmer le mot de passe';
+  static const String resetPassword = 'Réinitialiser';
+  static const String passwordRules = '8-15 car., 1 lettre, 1 chiffre, 1 symbole, sans espace';
+  static const String passwordResetSuccess = 'Mot de passe réinitialisé avec succès';
+  static const String invalidRecoveryCode = 'Code de récupération invalide';
+  static const String recoveryCodeExpired = 'Le code a expiré. Veuillez en demander un nouveau.';
+  static const String passwordsMustMatch = 'Les mots de passe ne correspondent pas';
+  static const String emailNotFound = 'Aucun compte associé à cet email';
+
+  // Account & Profile
+  static const String account = 'Compte';
+  static const String myProfile = 'Mon Profil';
+  static const String myProfileDesc = 'Consulter et modifier mes informations';
+  static const String accountSecurity = 'Sécurité du compte';
+  static const String accountSecurityDesc = 'Mot de passe et suppression';
+  static const String accountSecuritySubtitle = 'Gérez la sécurité de votre compte';
+  static const String changePassword = 'Changer le mot de passe';
+  static const String currentPassword = 'Mot de passe actuel';
+  static const String newPasswordLabel = 'Nouveau mot de passe';
+  static const String confirmPasswordLabel = 'Confirmer le nouveau mot de passe';
+  static const String passwordChanged = 'Mot de passe modifié avec succès';
+  static const String deleteAccount = 'Supprimer le compte';
+  static const String deleteAccountWarning =
+      'Cette action est irréversible. Toutes vos données seront supprimées.';
+  static const String deleteMyAccount = 'Supprimer mon compte';
+  static const String editProfile = 'Modifier le profil';
+  static const String saveChanges = 'Enregistrer les modifications';
+  static const String profileUpdated = 'Profil mis à jour';
+  static const String viewMode = 'Consulter';
+  static const String editMode = 'Modifier';
+  static const String dateOfBirth = 'Date de naissance';
+  static const String phoneNumber = 'Téléphone';
 }

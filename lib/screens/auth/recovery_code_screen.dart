@@ -1,0 +1,422 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/constants/app_strings.dart';
+import '../../core/theme/app_colors.dart';
+import '../../providers/auth_provider.dart';
+
+class RecoveryCodeScreen extends ConsumerStatefulWidget {
+  final String email;
+
+  const RecoveryCodeScreen({super.key, required this.email});
+
+  @override
+  ConsumerState<RecoveryCodeScreen> createState() =>
+      _RecoveryCodeScreenState();
+}
+
+class _RecoveryCodeScreenState extends ConsumerState<RecoveryCodeScreen>
+    with SingleTickerProviderStateMixin {
+  final _codeController = TextEditingController();
+
+  bool _isLoading = false;
+  bool _isResending = false;
+  String? _error;
+
+  /// Countdown in seconds (starts at 120 = 2 minutes).
+  int _secondsLeft = 120;
+  Timer? _countdownTimer;
+
+  late final AnimationController _animController;
+  late final Animation<double> _headerSlide;
+  late final Animation<double> _formFade;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _headerSlide = Tween<double>(begin: -30, end: 0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOutCubic),
+      ),
+    );
+    _formFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.3, 0.8, curve: Curves.easeOut),
+      ),
+    );
+    _animController.forward();
+    _startCountdown();
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _animController.dispose();
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    setState(() => _secondsLeft = 120);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        if (_secondsLeft > 0) {
+          _secondsLeft--;
+        } else {
+          timer.cancel();
+        }
+      });
+    });
+  }
+
+  String get _countdownLabel {
+    final minutes = _secondsLeft ~/ 60;
+    final seconds = _secondsLeft % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _handleVerify() async {
+    final code = _codeController.text.trim();
+    if (code.length != 6) {
+      setState(() => _error = 'Veuillez entrer un code à 6 chiffres');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final error = await ref
+        .read(authProvider.notifier)
+        .verifyRecoveryCode(widget.email, code);
+
+    if (!mounted) return;
+
+    if (error != null) {
+      setState(() {
+        _isLoading = false;
+        _error = error;
+      });
+      return;
+    }
+
+    setState(() => _isLoading = false);
+    context.push(
+      '/reset-password',
+      extra: {'email': widget.email, 'code': code},
+    );
+  }
+
+  Future<void> _handleResend() async {
+    setState(() {
+      _isResending = true;
+      _error = null;
+      _codeController.clear();
+    });
+
+    final error = await ref
+        .read(authProvider.notifier)
+        .sendRecoveryCode(widget.email);
+
+    if (!mounted) return;
+
+    setState(() => _isResending = false);
+
+    if (error != null) {
+      setState(() => _error = error);
+      return;
+    }
+
+    _startCountdown();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Code renvoyé à ${widget.email}'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: AnimatedBuilder(
+        animation: _animController,
+        builder: (context, child) {
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                Transform.translate(
+                  offset: Offset(0, _headerSlide.value),
+                  child: _buildHeader(),
+                ),
+                Opacity(
+                  opacity: _formFade.value,
+                  child: Transform.translate(
+                    offset: Offset(0, 20 * (1 - _formFade.value)),
+                    child: _buildForm(),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity,
+      height: 250,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.primary, AppColors.primaryLight],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: () => context.pop(),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      size: 18,
+                      color: AppColors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                AppStrings.recoveryCodeTitle,
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.white,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${AppStrings.recoveryCodeSent}\n${widget.email}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.white.withOpacity(0.7),
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Error container
+          if (_error != null) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.error.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded,
+                      color: AppColors.error, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(
+                        color: AppColors.error,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+
+          // Code input — centered, large font
+          Center(
+            child: SizedBox(
+              width: 200,
+              child: TextField(
+                controller: _codeController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                maxLength: 6,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _handleVerify(),
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textDark,
+                  letterSpacing: 8,
+                ),
+                decoration: InputDecoration(
+                  counterText: '',
+                  hintText: '······',
+                  hintStyle: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 8,
+                    color: AppColors.textLight.withOpacity(0.4),
+                  ),
+                ),
+                onChanged: (val) {
+                  if (_error != null) setState(() => _error = null);
+                },
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Countdown / resend row
+          Center(
+            child: _secondsLeft > 0
+                ? Text(
+                    '${AppStrings.resendCodeIn} $_countdownLabel',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textLight,
+                    ),
+                  )
+                : _isResending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.accent),
+                        ),
+                      )
+                    : GestureDetector(
+                        onTap: _handleResend,
+                        child: const Text(
+                          AppStrings.resendCode,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ),
+          ),
+
+          const SizedBox(height: 36),
+
+          // Verify button
+          _buildAccentButton(
+            label: AppStrings.verify,
+            isLoading: _isLoading,
+            onPressed: _handleVerify,
+          ),
+
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccentButton({
+    required String label,
+    required bool isLoading,
+    required VoidCallback onPressed,
+  }) {
+    return GestureDetector(
+      onTap: isLoading ? null : onPressed,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: double.infinity,
+        height: 56,
+        decoration: BoxDecoration(
+          gradient: AppColors.accentGradient,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accent.withOpacity(0.35),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Center(
+          child: isLoading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(AppColors.white),
+                  ),
+                )
+              : Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}

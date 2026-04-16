@@ -55,7 +55,7 @@ class MainShell extends ConsumerWidget {
             _navItem(Icons.people_rounded, 'Contacts', 1, current, ref),
             _scanButton(ref),
             _navItem(Icons.access_time_rounded, 'Rappels', 3, current, ref),
-            _navItem(Icons.person_rounded, 'Profil', 4, current, ref),
+            _navItem(Icons.person_rounded, 'Compte', 4, current, ref),
           ],
         ),
       ),

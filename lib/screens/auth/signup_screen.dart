@@ -82,9 +82,26 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
         );
 
     if (success && mounted) {
-      await ref.read(contactsProvider.notifier).reload();
-      await ref.read(remindersProvider.notifier).reload();
-      if (mounted) context.go('/main');
+      // Log out so the user must login with their new credentials
+      await ref.read(authProvider.notifier).logout();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Expanded(child: Text('Compte créé ! Connectez-vous.')),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        context.go('/login');
+      }
     }
   }
 

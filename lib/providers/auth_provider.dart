@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -10,6 +12,14 @@ import '../services/encryption_service.dart';
 import '../services/storage_service.dart';
 
 const _uuid = Uuid();
+
+/// In-memory container for a pending password-recovery code.
+class _RecoveryCode {
+  final String code;
+  final DateTime expiresAt;
+  _RecoveryCode(this.code, this.expiresAt);
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+}
 
 class AuthState {
   final bool isLoggedIn;
@@ -352,6 +362,118 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await StorageService.setCurrentSession(updated, user.sessionToken ?? '');
     state = state.copyWith(userPhotoPath: photoPath);
   }
+
+  // ---------------- Password Recovery ----------------
+
+  /// In-memory map of email-lookup → pending recovery code.
+  /// Keyed by the same deterministic lookup hash used for DB lookups so we
+  /// never store the raw email in memory beyond what is strictly needed.
+  static final Map<String, _RecoveryCode> _recoveryCodes = {};
+
+  /// Validates [email], checks that a local account exists, generates a
+  /// random 6-digit recovery code valid for 10 minutes and stores it in
+  /// [_recoveryCodes].
+  ///
+  /// Returns `null` on success, or an error string on failure.
+  Future<String?> sendRecoveryCode(String email) async {
+    final emailErr = Validators.validateEmail(email);
+    if (emailErr != null) return emailErr;
+
+    final lookup = _emailLookup(email);
+    final user = await DatabaseService.findUserByEmailLookup(lookup);
+    if (user == null) {
+      return 'Aucun compte associé à cet email';
+    }
+
+    if (user.authProvider != 'email') {
+      return 'Ce compte utilise ${user.authProvider == 'google' ? 'Google' : 'Apple'}. '
+          'La récupération par code n\'est pas disponible pour ce type de compte.';
+    }
+
+    // Generate a 6-digit code.
+    final rand = Random.secure();
+    final code = (100000 + rand.nextInt(900000)).toString();
+
+    _recoveryCodes[lookup] = _RecoveryCode(
+      code,
+      DateTime.now().add(const Duration(minutes: 10)),
+    );
+
+    // In a production app we would send an email here.
+    // For this local-only app the code is stored in memory.
+    return null; // success
+  }
+
+  /// Verifies that [code] matches the stored recovery code for [email] and
+  /// hasn't expired.
+  ///
+  /// Returns `null` on success, or an error string on failure.
+  Future<String?> verifyRecoveryCode(String email, String code) async {
+    final lookup = _emailLookup(email);
+    final stored = _recoveryCodes[lookup];
+
+    if (stored == null) {
+      return 'Aucun code de récupération en attente. Veuillez en demander un nouveau.';
+    }
+    if (stored.isExpired) {
+      _recoveryCodes.remove(lookup);
+      return 'Le code a expiré. Veuillez en demander un nouveau.';
+    }
+    if (stored.code != code.trim()) {
+      return 'Code de récupération invalide';
+    }
+    return null; // success
+  }
+
+  /// Resets the password for the account identified by [email], after
+  /// re-verifying [code].  Rotates the session token so that any other active
+  /// sessions are invalidated.
+  ///
+  /// Returns `null` on success, or an error string on failure.
+  Future<String?> resetPassword(
+      String email, String code, String newPassword) async {
+    // Re-verify the code.
+    final codeErr = await verifyRecoveryCode(email, code);
+    if (codeErr != null) return codeErr;
+
+    // Validate new password strength.
+    final pwdErr = Validators.validatePassword(newPassword);
+    if (pwdErr != null) return pwdErr;
+
+    // Fetch the user.
+    final lookup = _emailLookup(email);
+    final user = await DatabaseService.findUserByEmailLookup(lookup);
+    if (user == null) return 'Aucun compte associé à cet email';
+
+    // Hash the new password, rotate token and persist.
+    final newToken = EncryptionService.generateSessionToken();
+    final updated = user.copyWith(
+      passwordHash: EncryptionService.hashPassword(newPassword),
+      sessionToken: newToken,
+      passwordChangedAt: DateTime.now(),
+    );
+    await DatabaseService.updateUser(updated);
+
+    // Clear the used recovery code.
+    _recoveryCodes.remove(lookup);
+
+    // If this user happens to be the currently-logged-in user, update the
+    // local session so they remain logged in after reset.
+    final current = StorageService.currentUser;
+    if (current != null && current.id == user.id) {
+      await StorageService.setCurrentSession(updated, newToken);
+      state = state.copyWith(
+        isLoggedIn: true,
+        userName: updated.fullName,
+        userEmail: updated.email,
+        clearError: true,
+      );
+    }
+
+    return null; // success
+  }
+
+  // ----------------------------------------------------------------
 
   String _emailLookup(String email) =>
       DatabaseService.lookupHashForEmail(email);

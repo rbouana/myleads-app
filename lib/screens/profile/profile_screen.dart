@@ -64,6 +64,18 @@ class ProfileScreen extends ConsumerWidget {
               ),
               child: Column(
                 children: [
+                  // Header title
+                  Text(
+                    AppStrings.account,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.55),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   // Avatar with photo picker
                   GestureDetector(
                     onTap: () => _pickPhoto(context, ref),
@@ -110,7 +122,8 @@ class ProfileScreen extends ConsumerWidget {
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 2),
                             ),
-                            child: const Icon(Icons.camera_alt, size: 14, color: AppColors.primary),
+                            child: const Icon(Icons.camera_alt,
+                                size: 14, color: AppColors.primary),
                           ),
                         ),
                       ],
@@ -139,9 +152,15 @@ class ProfileScreen extends ConsumerWidget {
                   Row(
                     children: [
                       _statItem('${contacts.totalContacts}', 'Contacts'),
-                      Container(width: 1, height: 30, color: Colors.white.withOpacity(0.1)),
+                      Container(
+                          width: 1,
+                          height: 30,
+                          color: Colors.white.withOpacity(0.1)),
                       _statItem('${contacts.hotLeads}', 'Hot Leads'),
-                      Container(width: 1, height: 30, color: Colors.white.withOpacity(0.1)),
+                      Container(
+                          width: 1,
+                          height: 30,
+                          color: Colors.white.withOpacity(0.1)),
                       _statItem('${contacts.warmLeads}', 'Warm'),
                     ],
                   ),
@@ -156,11 +175,19 @@ class ProfileScreen extends ConsumerWidget {
                 children: [
                   _menuItem(
                     Icons.person,
-                    AppStrings.myAccount,
-                    AppStrings.myAccountDesc,
+                    AppStrings.myProfile,
+                    AppStrings.myProfileDesc,
                     AppColors.primary.withOpacity(0.08),
                     AppColors.primary,
-                    () {},
+                    () => context.push('/my-profile'),
+                  ),
+                  _menuItem(
+                    Icons.security_rounded,
+                    AppStrings.accountSecurity,
+                    AppStrings.accountSecurityDesc,
+                    AppColors.warm.withOpacity(0.1),
+                    AppColors.warm,
+                    () => context.push('/account-security'),
                   ),
                   _menuItem(
                     Icons.notifications,
@@ -320,7 +347,8 @@ class ProfileScreen extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: isLogout ? AppColors.hot : AppColors.textDark,
+                          color:
+                              isLogout ? AppColors.hot : AppColors.textDark,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -334,7 +362,8 @@ class ProfileScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: AppColors.textLight, size: 20),
+                Icon(Icons.chevron_right,
+                    color: AppColors.textLight, size: 20),
               ],
             ),
           ),

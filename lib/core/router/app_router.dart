@@ -3,12 +3,17 @@ import 'package:go_router/go_router.dart';
 import '../../screens/splash/splash_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/auth/signup_screen.dart';
+import '../../screens/auth/forgot_password_screen.dart';
+import '../../screens/auth/recovery_code_screen.dart';
+import '../../screens/auth/reset_password_screen.dart';
 import '../../screens/home/main_shell.dart';
 import '../../screens/review/review_screen.dart';
 import '../../screens/contacts/contact_detail_screen.dart';
 import '../../screens/contacts/contact_edit_screen.dart';
 import '../../screens/pricing/pricing_screen.dart';
 import '../../screens/scan/scan_screen.dart';
+import '../../screens/profile/my_profile_screen.dart';
+import '../../screens/profile/account_security_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -43,6 +48,65 @@ final appRouter = GoRouter(
           );
         },
       ),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      pageBuilder: (context, state) => CustomTransitionPage(
+        key: state.pageKey,
+        child: const ForgotPasswordScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          final tween = Tween(begin: begin, end: end)
+              .chain(CurveTween(curve: Curves.easeInOut));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    ),
+    GoRoute(
+      path: '/recovery-code',
+      pageBuilder: (context, state) {
+        final email = state.extra as String? ?? '';
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: RecoveryCodeScreen(email: email),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            final tween = Tween(begin: begin, end: end)
+                .chain(CurveTween(curve: Curves.easeInOut));
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+        );
+      },
+    ),
+    GoRoute(
+      path: '/reset-password',
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        final email = extra['email'] as String? ?? '';
+        final code = extra['code'] as String? ?? '';
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: ResetPasswordScreen(email: email, code: code),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            final tween = Tween(begin: begin, end: end)
+                .chain(CurveTween(curve: Curves.easeInOut));
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+        );
+      },
     ),
     GoRoute(
       path: '/main',
@@ -148,6 +212,40 @@ final appRouter = GoRouter(
         child: const PricingScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(0.0, 1.0);
+          const end = Offset.zero;
+          final tween = Tween(begin: begin, end: end)
+              .chain(CurveTween(curve: Curves.easeInOut));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    ),
+    GoRoute(
+      path: '/my-profile',
+      pageBuilder: (context, state) => CustomTransitionPage(
+        key: state.pageKey,
+        child: const MyProfileScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          final tween = Tween(begin: begin, end: end)
+              .chain(CurveTween(curve: Curves.easeInOut));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    ),
+    GoRoute(
+      path: '/account-security',
+      pageBuilder: (context, state) => CustomTransitionPage(
+        key: state.pageKey,
+        child: const AccountSecurityScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
           const end = Offset.zero;
           final tween = Tween(begin: begin, end: end)
               .chain(CurveTween(curve: Curves.easeInOut));
