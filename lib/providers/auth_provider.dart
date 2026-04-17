@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../core/utils/validators.dart';
 import '../models/user_account.dart';
 import '../services/database_service.dart';
+import '../services/email_service.dart';
 import '../services/encryption_service.dart';
 import '../services/storage_service.dart';
 
@@ -102,6 +103,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         isLoading: false,
         error: 'Email ou mot de passe incorrect',
+      );
+      return false;
+    }
+
+    // If the email has not been verified yet, send a verification code and
+    // block login until verification is complete.
+    if (!user.emailVerified) {
+      await sendVerificationCode(email);
+      state = state.copyWith(
+        isLoading: false,
+        error:
+            'Veuillez vérifier votre email. Un code a été envoyé à $email.',
       );
       return false;
     }
@@ -204,6 +217,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       userEmail: user.email,
       clearError: true,
     );
+
+    // Send email verification code (non-blocking).
+    await sendVerificationCode(email.trim());
+
     return true;
   }
 
@@ -370,6 +387,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// never store the raw email in memory beyond what is strictly needed.
   static final Map<String, _RecoveryCode> _recoveryCodes = {};
 
+  /// In-memory map of email-lookup → pending email-verification code.
+  /// Same keying strategy as [_recoveryCodes].
+  static final Map<String, _RecoveryCode> _verificationCodes = {};
+
   /// Validates [email], checks that a local account exists, generates a
   /// random 6-digit recovery code valid for 10 minutes and stores it in
   /// [_recoveryCodes].
@@ -399,8 +420,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       DateTime.now().add(const Duration(minutes: 10)),
     );
 
-    // In a production app we would send an email here.
-    // For this local-only app the code is stored in memory.
+    // Try to send email (non-blocking — code is still valid if email fails).
+    EmailService.sendRecoveryEmail(email, code);
+
     return null; // success
   }
 
@@ -469,6 +491,72 @@ class AuthNotifier extends StateNotifier<AuthState> {
         clearError: true,
       );
     }
+
+    return null; // success
+  }
+
+  // ---------------- Email Verification ----------------
+
+  /// Generates a 6-digit email-verification code, stores it in
+  /// [_verificationCodes] (valid for 10 minutes), and attempts to deliver
+  /// it via [EmailService].
+  ///
+  /// Returns `null` on success, or an error string on failure.
+  Future<String?> sendVerificationCode(String email) async {
+    final emailErr = Validators.validateEmail(email);
+    if (emailErr != null) return emailErr;
+
+    final lookup = _emailLookup(email);
+    final rand = Random.secure();
+    final code = (100000 + rand.nextInt(900000)).toString();
+
+    _verificationCodes[lookup] = _RecoveryCode(
+      code,
+      DateTime.now().add(const Duration(minutes: 10)),
+    );
+
+    // Try to send email (non-blocking — code is still valid if email fails).
+    EmailService.sendVerificationEmail(email, code);
+
+    return null; // success
+  }
+
+  /// Verifies [code] against the stored email-verification code for [email].
+  /// On success, sets `email_verified = 1` in the database and updates the
+  /// local session, then clears the pending code.
+  ///
+  /// Returns `null` on success, or an error string on failure.
+  Future<String?> verifyEmailCode(String email, String code) async {
+    final lookup = _emailLookup(email);
+    final stored = _verificationCodes[lookup];
+
+    if (stored == null) {
+      return 'Aucun code de vérification en attente. Veuillez en demander un nouveau.';
+    }
+    if (stored.isExpired) {
+      _verificationCodes.remove(lookup);
+      return 'Le code a expiré. Veuillez en demander un nouveau.';
+    }
+    if (stored.code != code.trim()) {
+      return 'Code de vérification invalide';
+    }
+
+    // Mark the account as email-verified in the DB.
+    final user = await DatabaseService.findUserByEmailLookup(lookup);
+    if (user != null) {
+      final updated = user.copyWith(emailVerified: true);
+      await DatabaseService.updateUser(updated);
+
+      // If this is the currently logged-in user, refresh the session.
+      final current = StorageService.currentUser;
+      if (current != null && current.id == user.id) {
+        await StorageService.setCurrentSession(
+            updated, user.sessionToken ?? '');
+      }
+    }
+
+    // Clear the used verification code.
+    _verificationCodes.remove(lookup);
 
     return null; // success
   }

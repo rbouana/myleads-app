@@ -4,6 +4,7 @@ import '../../screens/splash/splash_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/auth/signup_screen.dart';
 import '../../screens/auth/forgot_password_screen.dart';
+import '../../screens/auth/email_verification_screen.dart';
 import '../../screens/auth/recovery_code_screen.dart';
 import '../../screens/auth/reset_password_screen.dart';
 import '../../screens/home/main_shell.dart';
@@ -65,6 +66,26 @@ final appRouter = GoRouter(
           );
         },
       ),
+    ),
+    GoRoute(
+      path: '/email-verification',
+      pageBuilder: (context, state) {
+        final email = state.extra as String? ?? '';
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: EmailVerificationScreen(email: email),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            final tween = Tween(begin: begin, end: end)
+                .chain(CurveTween(curve: Curves.easeInOut));
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+        );
+      },
     ),
     GoRoute(
       path: '/recovery-code',

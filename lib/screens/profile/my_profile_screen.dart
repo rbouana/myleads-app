@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/database_service.dart';
+import '../../services/photo_storage_service.dart';
 import '../../services/storage_service.dart';
 
 class MyProfileScreen extends ConsumerStatefulWidget {
@@ -23,8 +26,12 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
 
   late final TextEditingController _firstNameCtrl;
   late final TextEditingController _lastNameCtrl;
+  late final TextEditingController _nicknameCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _dobCtrl;
+  late final TextEditingController _companyNameCtrl;
+  late final TextEditingController _companyRoleCtrl;
+  late final TextEditingController _biographyCtrl;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -34,16 +41,24 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     final user = StorageService.currentUser;
     _firstNameCtrl = TextEditingController(text: user?.firstName ?? '');
     _lastNameCtrl = TextEditingController(text: user?.lastName ?? '');
+    _nicknameCtrl = TextEditingController(text: user?.nickname ?? '');
     _phoneCtrl = TextEditingController(text: user?.phone ?? '');
     _dobCtrl = TextEditingController(text: user?.dateOfBirth ?? '');
+    _companyNameCtrl = TextEditingController(text: user?.companyName ?? '');
+    _companyRoleCtrl = TextEditingController(text: user?.companyRole ?? '');
+    _biographyCtrl = TextEditingController(text: user?.biography ?? '');
   }
 
   @override
   void dispose() {
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
+    _nicknameCtrl.dispose();
     _phoneCtrl.dispose();
     _dobCtrl.dispose();
+    _companyNameCtrl.dispose();
+    _companyRoleCtrl.dispose();
+    _biographyCtrl.dispose();
     super.dispose();
   }
 
@@ -65,7 +80,11 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
         maxWidth: 512,
       );
       if (image != null && mounted) {
-        await ref.read(authProvider.notifier).updatePhoto(image.path);
+        final savedPath =
+            await PhotoStorageService.saveProfilePhoto(image.path);
+        if (savedPath != null) {
+          await ref.read(authProvider.notifier).updatePhoto(savedPath);
+        }
       }
     } catch (_) {}
   }
@@ -82,9 +101,21 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
       final updated = user.copyWith(
         firstName: _firstNameCtrl.text.trim(),
         lastName: _lastNameCtrl.text.trim(),
+        nickname: _nicknameCtrl.text.trim().isEmpty
+            ? null
+            : _nicknameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
         dateOfBirth:
             _dobCtrl.text.trim().isEmpty ? null : _dobCtrl.text.trim(),
+        companyName: _companyNameCtrl.text.trim().isEmpty
+            ? null
+            : _companyNameCtrl.text.trim(),
+        companyRole: _companyRoleCtrl.text.trim().isEmpty
+            ? null
+            : _companyRoleCtrl.text.trim(),
+        biography: _biographyCtrl.text.trim().isEmpty
+            ? null
+            : _biographyCtrl.text.trim(),
       );
       await DatabaseService.updateUser(updated);
       await StorageService.setCurrentSession(updated, user.sessionToken ?? '');
@@ -140,10 +171,45 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
       final user = StorageService.currentUser;
       _firstNameCtrl.text = user?.firstName ?? '';
       _lastNameCtrl.text = user?.lastName ?? '';
+      _nicknameCtrl.text = user?.nickname ?? '';
       _phoneCtrl.text = user?.phone ?? '';
       _dobCtrl.text = user?.dateOfBirth ?? '';
+      _companyNameCtrl.text = user?.companyName ?? '';
+      _companyRoleCtrl.text = user?.companyRole ?? '';
+      _biographyCtrl.text = user?.biography ?? '';
     }
     setState(() => _isEditing = !_isEditing);
+  }
+
+  String _buildProfileQrData() {
+    final user = StorageService.currentUser;
+    if (user == null) return '';
+    final buf = StringBuffer();
+    buf.writeln('BEGIN:VCARD');
+    buf.writeln('VERSION:3.0');
+    buf.writeln('FN:${user.fullName}');
+    buf.writeln('N:${user.lastName};${user.firstName};;;');
+    if (user.nickname != null) buf.writeln('NICKNAME:${user.nickname}');
+    if (user.email.isNotEmpty) buf.writeln('EMAIL:${user.email}');
+    if (user.phone != null) buf.writeln('TEL:${user.phone}');
+    if (user.companyName != null) buf.writeln('ORG:${user.companyName}');
+    if (user.companyRole != null) buf.writeln('TITLE:${user.companyRole}');
+    if (user.biography != null) buf.writeln('NOTE:${user.biography}');
+    buf.writeln('END:VCARD');
+    return buf.toString();
+  }
+
+  void _shareProfile() {
+    final user = StorageService.currentUser;
+    if (user == null) return;
+    final buf = StringBuffer();
+    buf.writeln(user.fullName);
+    if (user.companyRole != null) buf.writeln(user.companyRole);
+    if (user.companyName != null) buf.writeln(user.companyName);
+    if (user.email.isNotEmpty) buf.writeln('Email: ${user.email}');
+    if (user.phone != null) buf.writeln('Tél: ${user.phone}');
+    if (user.biography != null) buf.writeln('\n${user.biography}');
+    SharePlus.instance.share(ShareParams(text: buf.toString()));
   }
 
   @override
@@ -177,7 +243,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
               ),
               child: Column(
                 children: [
-                  // Top bar: back + title
+                  // Top bar: back + title + share + edit/cancel toggle
                   Row(
                     children: [
                       _headerIconButton(
@@ -195,6 +261,12 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                           ),
                         ),
                       ),
+                      // Share button
+                      _headerIconButton(
+                        icon: Icons.ios_share_rounded,
+                        onTap: _shareProfile,
+                      ),
+                      const SizedBox(width: 8),
                       // Edit / Cancel toggle
                       _headerIconButton(
                         icon: _isEditing
@@ -361,6 +433,13 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                           ),
                           _divider(),
                           _profileField(
+                            label: AppStrings.nickname,
+                            value: user?.nickname ?? '—',
+                            controller: _nicknameCtrl,
+                            hint: 'ex: Régis',
+                          ),
+                          _divider(),
+                          _profileField(
                             label: AppStrings.email,
                             value: displayEmail,
                             controller: null,
@@ -380,9 +459,31 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                             label: AppStrings.dateOfBirth,
                             value: user?.dateOfBirth ?? '—',
                             controller: _dobCtrl,
-                            isLast: true,
                             hint: 'JJ/MM/AAAA',
                             keyboardType: TextInputType.datetime,
+                          ),
+                          _divider(),
+                          _profileField(
+                            label: AppStrings.companyNameLabel,
+                            value: user?.companyName ?? '—',
+                            controller: _companyNameCtrl,
+                            hint: 'ex: Acme Corp',
+                          ),
+                          _divider(),
+                          _profileField(
+                            label: AppStrings.companyRoleLabel,
+                            value: user?.companyRole ?? '—',
+                            controller: _companyRoleCtrl,
+                            hint: 'ex: Directeur Commercial',
+                          ),
+                          _divider(),
+                          _profileField(
+                            label: AppStrings.biographyLabel,
+                            value: user?.biography ?? '—',
+                            controller: _biographyCtrl,
+                            isLast: true,
+                            hint: 'Quelques mots sur vous...',
+                            maxLines: 3,
                           ),
                         ],
                       ),
@@ -425,6 +526,74 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                         ),
                       ),
                     ],
+
+                    const SizedBox(height: 32),
+
+                    // ── QR Code Section ──────────────────────────────
+                    Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: AppColors.accent,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          AppStrings.qrCodeSection,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.07),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 28),
+                      child: Column(
+                        children: [
+                          QrImageView(
+                            data: _buildProfileQrData(),
+                            version: QrVersions.auto,
+                            size: 200.0,
+                            backgroundColor: Colors.white,
+                            eyeStyle: const QrEyeStyle(
+                              eyeShape: QrEyeShape.roundedOuter,
+                              color: AppColors.primary,
+                            ),
+                            dataModuleStyle: const QrDataModuleStyle(
+                              dataModuleShape: QrDataModuleShape.roundedOuter,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            AppStrings.qrCodeHint,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
                     const SizedBox(height: 32),
                   ],
@@ -475,6 +644,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     IconData? trailingIcon,
     String? hint,
     TextInputType? keyboardType,
+    int? maxLines,
     String? Function(String?)? validator,
   }) {
     final borderRadius = BorderRadius.only(
@@ -505,6 +675,8 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
               controller: controller,
               keyboardType: keyboardType,
               validator: validator,
+              maxLines: maxLines ?? 1,
+              minLines: 1,
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -562,6 +734,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
@@ -582,16 +755,20 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: readOnly
-                        ? AppColors.textMid
-                        : AppColors.textDark,
+                    color: readOnly ? AppColors.textMid : AppColors.textDark,
                   ),
+                  maxLines: maxLines,
+                  overflow:
+                      maxLines != null ? TextOverflow.ellipsis : null,
                 ),
               ],
             ),
           ),
           if (trailingIcon != null)
-            Icon(trailingIcon, size: 16, color: AppColors.textLight),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(trailingIcon, size: 16, color: AppColors.textLight),
+            ),
         ],
       ),
     );

@@ -25,7 +25,7 @@ import 'web_db_factory_stub.dart'
 class DatabaseService {
   static Database? _db;
   static const _dbName = 'myleads.db';
-  static const _dbVersion = 3;
+  static const _dbVersion = 4;
 
   static Future<Database> get database async {
     _db ??= await _initDb();
@@ -77,6 +77,14 @@ class DatabaseService {
       await db.execute('ALTER TABLE users ADD COLUMN photo_path TEXT');
       await db.execute('ALTER TABLE contacts ADD COLUMN photo_path TEXT');
     }
+    if (oldVersion < 4) {
+      // v3 → v4: expanded user profile + email verification
+      await db.execute('ALTER TABLE users ADD COLUMN nickname_enc TEXT');
+      await db.execute('ALTER TABLE users ADD COLUMN company_name_enc TEXT');
+      await db.execute('ALTER TABLE users ADD COLUMN company_role_enc TEXT');
+      await db.execute('ALTER TABLE users ADD COLUMN biography_enc TEXT');
+      await db.execute('ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0');
+    }
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -88,16 +96,21 @@ class DatabaseService {
         email_lookup TEXT NOT NULL UNIQUE,
         first_name_enc TEXT NOT NULL,
         last_name_enc TEXT NOT NULL,
+        nickname_enc TEXT,
         phone_enc TEXT,
         phone_lookup TEXT UNIQUE,
         date_of_birth_enc TEXT,
+        company_name_enc TEXT,
+        company_role_enc TEXT,
+        biography_enc TEXT,
         password_hash TEXT NOT NULL,
         auth_provider TEXT NOT NULL DEFAULT 'email',
         session_token TEXT,
         created_at TEXT NOT NULL,
         last_login_at TEXT,
         password_changed_at TEXT NOT NULL,
-        photo_path TEXT
+        photo_path TEXT,
+        email_verified INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
@@ -276,6 +289,8 @@ class DatabaseService {
         'email_lookup': _hashLookup(Validators.normalizeEmail(u.email)),
         'first_name_enc': EncryptionService.encryptText(u.firstName),
         'last_name_enc': EncryptionService.encryptText(u.lastName),
+        'nickname_enc':
+            u.nickname != null ? EncryptionService.encryptText(u.nickname!) : null,
         'phone_enc':
             u.phone != null ? EncryptionService.encryptText(u.phone!) : null,
         'phone_lookup': u.phone != null && u.phone!.trim().isNotEmpty
@@ -284,6 +299,12 @@ class DatabaseService {
         'date_of_birth_enc': u.dateOfBirth != null
             ? EncryptionService.encryptText(u.dateOfBirth!)
             : null,
+        'company_name_enc':
+            u.companyName != null ? EncryptionService.encryptText(u.companyName!) : null,
+        'company_role_enc':
+            u.companyRole != null ? EncryptionService.encryptText(u.companyRole!) : null,
+        'biography_enc':
+            u.biography != null ? EncryptionService.encryptText(u.biography!) : null,
         'password_hash': u.passwordHash,
         'auth_provider': u.authProvider,
         'session_token': u.sessionToken,
@@ -291,6 +312,7 @@ class DatabaseService {
         'last_login_at': u.lastLoginAt?.toIso8601String(),
         'password_changed_at': u.passwordChangedAt.toIso8601String(),
         'photo_path': u.photoPath,
+        'email_verified': u.emailVerified ? 1 : 0,
       };
 
   static UserAccount _userFromRow(Map<String, dynamic> row) {
@@ -299,11 +321,23 @@ class DatabaseService {
       email: EncryptionService.decryptText(row['email_enc'] as String?),
       firstName: EncryptionService.decryptText(row['first_name_enc'] as String?),
       lastName: EncryptionService.decryptText(row['last_name_enc'] as String?),
+      nickname: row['nickname_enc'] != null
+          ? EncryptionService.decryptText(row['nickname_enc'] as String?)
+          : null,
       phone: row['phone_enc'] != null
           ? EncryptionService.decryptText(row['phone_enc'] as String?)
           : null,
       dateOfBirth: row['date_of_birth_enc'] != null
           ? EncryptionService.decryptText(row['date_of_birth_enc'] as String?)
+          : null,
+      companyName: row['company_name_enc'] != null
+          ? EncryptionService.decryptText(row['company_name_enc'] as String?)
+          : null,
+      companyRole: row['company_role_enc'] != null
+          ? EncryptionService.decryptText(row['company_role_enc'] as String?)
+          : null,
+      biography: row['biography_enc'] != null
+          ? EncryptionService.decryptText(row['biography_enc'] as String?)
           : null,
       passwordHash: row['password_hash'] as String,
       authProvider: row['auth_provider'] as String? ?? 'email',
@@ -315,6 +349,7 @@ class DatabaseService {
       passwordChangedAt:
           DateTime.parse(row['password_changed_at'] as String),
       photoPath: row['photo_path'] as String?,
+      emailVerified: (row['email_verified'] as int?) == 1,
     );
   }
 

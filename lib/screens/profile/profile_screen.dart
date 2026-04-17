@@ -9,6 +9,7 @@ import '../../core/constants/app_strings.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/contacts_provider.dart';
 import '../../providers/reminders_provider.dart';
+import '../../services/photo_storage_service.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -22,7 +23,11 @@ class ProfileScreen extends ConsumerWidget {
         maxWidth: 512,
       );
       if (image != null) {
-        await ref.read(authProvider.notifier).updatePhoto(image.path);
+        final savedPath =
+            await PhotoStorageService.saveProfilePhoto(image.path);
+        if (savedPath != null) {
+          await ref.read(authProvider.notifier).updatePhoto(savedPath);
+        }
       }
     } catch (_) {}
   }

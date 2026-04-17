@@ -62,15 +62,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final email = _emailController.text.trim();
     final success = await ref.read(authProvider.notifier).login(
-          _emailController.text.trim(),
+          email,
           _passwordController.text,
         );
 
-    if (success && mounted) {
+    if (!mounted) return;
+
+    if (success) {
       await ref.read(contactsProvider.notifier).reload();
       await ref.read(remindersProvider.notifier).reload();
       if (mounted) context.go('/main');
+    } else {
+      // If login failed because email is not verified, redirect to verification
+      final error = ref.read(authProvider).error ?? '';
+      if (error.contains('vérifier votre email')) {
+        context.push('/email-verification', extra: email);
+      }
     }
   }
 

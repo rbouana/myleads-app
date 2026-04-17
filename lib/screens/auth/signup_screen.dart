@@ -82,25 +82,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
         );
 
     if (success && mounted) {
-      // Log out so the user must login with their new credentials
+      // Log out so the user must verify their email and then login.
       await ref.read(authProvider.notifier).logout();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white, size: 20),
-                SizedBox(width: 10),
-                Expanded(child: Text('Compte créé ! Connectez-vous.')),
-              ],
-            ),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            duration: const Duration(seconds: 3),
-          ),
+        // Navigate to email verification — it will redirect to /login on success.
+        context.go(
+          '/email-verification',
+          extra: _emailController.text.trim(),
         );
-        context.go('/login');
       }
     }
   }

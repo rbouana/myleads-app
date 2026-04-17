@@ -162,6 +162,15 @@ class AppStrings {
   static const String passwordsMustMatch = 'Les mots de passe ne correspondent pas';
   static const String emailNotFound = 'Aucun compte associé à cet email';
 
+  // Email Verification
+  static const String emailVerificationTitle = 'Vérification d\'email';
+  static const String emailVerificationSubtitle =
+      'Vérifiez votre adresse email pour activer votre compte';
+  static const String emailVerified = 'Email vérifié avec succès !';
+  static const String emailNotVerified = 'Veuillez vérifier votre email';
+  static const String verificationCodeSent =
+      'Un code de vérification a été envoyé à';
+
   // Account & Profile
   static const String account = 'Compte';
   static const String myProfile = 'Mon Profil';
@@ -185,4 +194,13 @@ class AppStrings {
   static const String editMode = 'Modifier';
   static const String dateOfBirth = 'Date de naissance';
   static const String phoneNumber = 'Téléphone';
+
+  // My Profile extended
+  static const String nickname = 'Surnom';
+  static const String companyNameLabel = 'Société';
+  static const String companyRoleLabel = 'Fonction';
+  static const String biographyLabel = 'Biographie';
+  static const String qrCodeSection = 'QR Code';
+  static const String qrCodeHint = 'Scannez pour voir le profil';
+  static const String shareProfile = 'Partager le profil';
 }

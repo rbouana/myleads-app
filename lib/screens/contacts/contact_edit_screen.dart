@@ -9,6 +9,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../models/contact.dart';
 import '../../providers/contacts_provider.dart';
+import '../../services/photo_storage_service.dart';
 
 /// Screen used both for editing an existing contact and for creating a new
 /// contact manually. When [contactId] is null we render empty fields with
@@ -273,7 +274,13 @@ class _ContactEditScreenState extends ConsumerState<ContactEditScreen> {
                               imageQuality: 80,
                               maxWidth: 512,
                             );
-                            if (img != null) setState(() => _photoPath = img.path);
+                            if (img != null) {
+                              final savedPath =
+                                  await PhotoStorageService.saveContactPhoto(
+                                      img.path);
+                              setState(
+                                  () => _photoPath = savedPath ?? img.path);
+                            }
                           },
                           child: Stack(
                             children: [

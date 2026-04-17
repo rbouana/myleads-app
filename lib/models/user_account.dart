@@ -7,8 +7,12 @@ class UserAccount {
   final String email;
   final String firstName;
   final String lastName;
+  final String? nickname;
   final String? phone;
   final String? dateOfBirth;
+  final String? companyName;
+  final String? companyRole;
+  final String? biography;
   final String passwordHash; // "salt:hash" or empty for OAuth accounts
   final String authProvider; // 'email' | 'google' | 'apple'
   final String? sessionToken;
@@ -16,14 +20,19 @@ class UserAccount {
   final DateTime? lastLoginAt;
   final DateTime passwordChangedAt;
   final String? photoPath; // local file path to profile photo
+  final bool emailVerified; // whether email has been verified
 
   UserAccount({
     required this.id,
     required this.email,
     required this.firstName,
     required this.lastName,
+    this.nickname,
     this.phone,
     this.dateOfBirth,
+    this.companyName,
+    this.companyRole,
+    this.biography,
     required this.passwordHash,
     this.authProvider = 'email',
     this.sessionToken,
@@ -31,6 +40,7 @@ class UserAccount {
     this.lastLoginAt,
     DateTime? passwordChangedAt,
     this.photoPath,
+    this.emailVerified = false,
   })  : createdAt = createdAt ?? DateTime.now(),
         passwordChangedAt = passwordChangedAt ?? DateTime.now();
 
@@ -41,8 +51,12 @@ class UserAccount {
     String? email,
     String? firstName,
     String? lastName,
+    String? nickname,
     String? phone,
     String? dateOfBirth,
+    String? companyName,
+    String? companyRole,
+    String? biography,
     String? passwordHash,
     String? authProvider,
     String? sessionToken,
@@ -50,14 +64,19 @@ class UserAccount {
     DateTime? lastLoginAt,
     DateTime? passwordChangedAt,
     String? photoPath,
+    bool? emailVerified,
   }) {
     return UserAccount(
       id: id ?? this.id,
       email: email ?? this.email,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
+      nickname: nickname ?? this.nickname,
       phone: phone ?? this.phone,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+      companyName: companyName ?? this.companyName,
+      companyRole: companyRole ?? this.companyRole,
+      biography: biography ?? this.biography,
       passwordHash: passwordHash ?? this.passwordHash,
       authProvider: authProvider ?? this.authProvider,
       sessionToken: sessionToken ?? this.sessionToken,
@@ -65,6 +84,7 @@ class UserAccount {
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
       passwordChangedAt: passwordChangedAt ?? this.passwordChangedAt,
       photoPath: photoPath ?? this.photoPath,
+      emailVerified: emailVerified ?? this.emailVerified,
     );
   }
 }
