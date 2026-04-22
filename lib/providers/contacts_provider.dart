@@ -17,16 +17,21 @@ class ContactResult {
   bool get isSuccess => error == null;
 }
 
+// Sentinel object used to distinguish "not provided" from an explicit null
+// in copyWith (so we can clear statusFilter by passing null).
+const Object _sentinel = Object();
 class ContactsState {
   final List<Contact> contacts;
   final String searchQuery;
   final String activeFilter;
+  final String? statusFilter;
   final bool isLoading;
 
   const ContactsState({
     this.contacts = const [],
     this.searchQuery = '',
     this.activeFilter = 'all',
+    this.statusFilter,
     this.isLoading = false,
   });
 
@@ -42,6 +47,12 @@ class ContactsState {
         return c.tags.any(
             (t) => t.toLowerCase() == activeFilter.toLowerCase());
       }).toList();
+    }
+
+
+    // Status filter (setStatusFilter)
+    if (statusFilter != null) {
+      filtered = filtered.where((c) => c.status == statusFilter).toList();
     }
 
     // Search by name, company, or job title (role)
@@ -64,26 +75,31 @@ class ContactsState {
     });
 
     return filtered;
-  }
 
   int get totalContacts => contacts.length;
   int get hotLeads => contacts.where((c) => c.status == 'hot').length;
   int get warmLeads => contacts.where((c) => c.status == 'warm').length;
   int get coldLeads => contacts.where((c) => c.status == 'cold').length;
 
+
   ContactsState copyWith({
     List<Contact>? contacts,
     String? searchQuery,
     String? activeFilter,
+    Object? statusFilter = _sentinel,
     bool? isLoading,
   }) {
     return ContactsState(
       contacts: contacts ?? this.contacts,
       searchQuery: searchQuery ?? this.searchQuery,
       activeFilter: activeFilter ?? this.activeFilter,
+      statusFilter:
+          statusFilter == _sentinel ? this.statusFilter : statusFilter as String?,
       isLoading: isLoading ?? this.isLoading,
     );
   }
+}
+
 }
 
 class ContactsNotifier extends StateNotifier<ContactsState> {
@@ -258,6 +274,13 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
 
   void setFilter(String filter) {
     state = state.copyWith(activeFilter: filter);
+  }
+
+
+  /// Filters the contacts list to only show contacts with [filter] status.
+  /// Pass null to clear the filter and show all statuses.
+  void setStatusFilter(String? filter) {
+    state = state.copyWith(statusFilter: filter);
   }
 
   // ============== VALIDATION ==============

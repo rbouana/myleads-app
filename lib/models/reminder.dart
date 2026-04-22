@@ -1,64 +1,94 @@
-/// Reminder entity for the local SQLite database.
+/// Reminder entity – v2 schema (multi-contact, full scheduling).
 class Reminder {
   final String id;
-  final String contactId;
-  String title;
-  String? description;
-  DateTime dueDate;
+  final String ownerId;
+
+  /// Primary contact ID (first element of contactIds for backward compat).
+  String get contactId => contactIds.isNotEmpty ? contactIds.first : '';
+
+  final List<String> contactIds;
+  final DateTime startDateTime;
+  final DateTime? endDateTime;
+  final String? repeatFrequency;
+  final String note;
+  final String toDoAction;
+  final String priority;
   bool isCompleted;
-  String priority; // 'urgent', 'soon', 'later'
-  DateTime createdAt;
-  String ownerId;
+  final DateTime createdAt;
 
   Reminder({
     required this.id,
-    required this.contactId,
-    required this.title,
-    this.description,
-    required this.dueDate,
+    required this.ownerId,
+    required this.contactIds,
+    required this.startDateTime,
+    this.endDateTime,
+    this.repeatFrequency,
+    required this.note,
+    this.toDoAction = 'call',
+    this.priority = 'normal',
     this.isCompleted = false,
-    this.priority = 'soon',
     DateTime? createdAt,
-    this.ownerId = '',
-  }) : createdAt = createdAt ?? DateTime.now();
+  })  : assert(contactIds.isNotEmpty, 'At least one contact is required'),
+        createdAt = createdAt ?? DateTime.now();
 
-  bool get isOverdue => !isCompleted && dueDate.isBefore(DateTime.now());
+  bool get isOverdue {
+    if (isCompleted) return false;
+    return startDateTime.isBefore(DateTime.now());
+  }
 
   bool get isToday {
     final now = DateTime.now();
-    return dueDate.year == now.year &&
-        dueDate.month == now.month &&
-        dueDate.day == now.day;
+    return startDateTime.year == now.year &&
+        startDateTime.month == now.month &&
+        startDateTime.day == now.day;
   }
 
   bool get isThisWeek {
     final now = DateTime.now();
-    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-    final endOfWeek = startOfWeek.add(const Duration(days: 6));
-    return dueDate.isAfter(startOfWeek.subtract(const Duration(days: 1))) &&
-        dueDate.isBefore(endOfWeek.add(const Duration(days: 1)));
+    final startOfWeek = DateTime(now.year, now.month, now.day - (now.weekday - 1));
+    final endOfWeek = startOfWeek.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+    return startDateTime.isAfter(startOfWeek.subtract(const Duration(seconds: 1))) &&
+        startDateTime.isBefore(endOfWeek.add(const Duration(seconds: 1)));
   }
+
+  bool get isLater {
+    final now = DateTime.now();
+    final startOfWeek = DateTime(now.year, now.month, now.day - (now.weekday - 1));
+    final endOfWeek = startOfWeek.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+    return startDateTime.isAfter(endOfWeek);
+  }
+
+  bool get isLate {
+    if (isCompleted) return false;
+    return startDateTime.isBefore(DateTime.now()) && !isToday;
+  }
+
+  DateTime get sortKey => endDateTime ?? startDateTime;
 
   Reminder copyWith({
     String? id,
-    String? contactId,
-    String? title,
-    String? description,
-    DateTime? dueDate,
-    bool? isCompleted,
-    String? priority,
     String? ownerId,
+    List<String>? contactIds,
+    DateTime? startDateTime,
+    DateTime? endDateTime,
+    String? repeatFrequency,
+    String? note,
+    String? toDoAction,
+    String? priority,
+    bool? isCompleted,
   }) {
     return Reminder(
       id: id ?? this.id,
-      contactId: contactId ?? this.contactId,
-      title: title ?? this.title,
-      description: description ?? this.description,
-      dueDate: dueDate ?? this.dueDate,
-      isCompleted: isCompleted ?? this.isCompleted,
-      priority: priority ?? this.priority,
-      createdAt: createdAt,
       ownerId: ownerId ?? this.ownerId,
+      contactIds: contactIds ?? this.contactIds,
+      startDateTime: startDateTime ?? this.startDateTime,
+      endDateTime: endDateTime ?? this.endDateTime,
+      repeatFrequency: repeatFrequency ?? this.repeatFrequency,
+      note: note ?? this.note,
+      toDoAction: toDoAction ?? this.toDoAction,
+      priority: priority ?? this.priority,
+      isCompleted: isCompleted ?? this.isCompleted,
+      createdAt: createdAt,
     );
   }
 }

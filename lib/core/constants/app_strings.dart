@@ -202,5 +202,16 @@ class AppStrings {
   static const String biographyLabel = 'Biographie';
   static const String qrCodeSection = 'QR Code';
   static const String qrCodeHint = 'Scannez pour voir le profil';
+  static const String createReminder = 'Créer un rappel';
+  static const String editReminder = 'Modifier le rappel';
+  static const String reminderDetail = 'Détail du rappel';
+  static const String changeEmail = 'Changer l'email';
+  static const String newEmail = 'Nouvel email';
+  static const String sendVerificationCode = 'Envoyer le code';
+  static const String laterTab = 'Plus tard';
+  static const String lateTab = 'En retard';
+  static const String doneTab = 'Terminé';
+  static const String linkedReminders = 'Rappels liés';
+  static const String contactQrCode = 'QR Code du contact';
   static const String shareProfile = 'Partager le profil';
 }

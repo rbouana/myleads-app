@@ -25,7 +25,7 @@ import 'web_db_factory_stub.dart'
 class DatabaseService {
   static Database? _db;
   static const _dbName = 'myleads.db';
-  static const _dbVersion = 4;
+  static const _dbVersion = 5;
 
   static Future<Database> get database async {
     _db ??= await _initDb();
@@ -84,6 +84,23 @@ class DatabaseService {
       await db.execute('ALTER TABLE users ADD COLUMN company_role_enc TEXT');
       await db.execute('ALTER TABLE users ADD COLUMN biography_enc TEXT');
       await db.execute('ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0');
+    }
+    if (oldVersion < 5) {
+      // v4 → v5: multi-contact reminders with start/end/repeat/action/priority
+      try { await db.execute("ALTER TABLE reminders ADD COLUMN contact_ids TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
+      try { await db.execute('ALTER TABLE reminders ADD COLUMN start_date_time TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE reminders ADD COLUMN end_date_time TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE reminders ADD COLUMN repeat_frequency TEXT'); } catch (_) {}
+      try { await db.execute("ALTER TABLE reminders ADD COLUMN note TEXT NOT NULL DEFAULT ''"); } catch (_) {}
+      try { await db.execute("ALTER TABLE reminders ADD COLUMN todo_action TEXT NOT NULL DEFAULT 'call'"); } catch (_) {}
+      try { await db.execute("ALTER TABLE reminders ADD COLUMN priority_v2 TEXT NOT NULL DEFAULT 'normal'"); } catch (_) {}
+      // Backfill from legacy columns
+      try { await db.execute("UPDATE reminders SET contact_ids = '[\"' || contact_id || '\"]' WHERE contact_id IS NOT NULL AND (contact_ids = '[]' OR contact_ids IS NULL)"); } catch (_) {}
+      try { await db.execute('UPDATE reminders SET start_date_time = due_date WHERE start_date_time IS NULL AND due_date IS NOT NULL'); } catch (_) {}
+      try { await db.execute("UPDATE reminders SET note = COALESCE(title, '') WHERE (note = '' OR note IS NULL) AND title IS NOT NULL"); } catch (_) {}
+      try { await db.execute("UPDATE reminders SET priority_v2 = 'very_important' WHERE priority = 'urgent'"); } catch (_) {}
+      try { await db.execute("UPDATE reminders SET priority_v2 = 'important' WHERE priority = 'soon'"); } catch (_) {}
+      try { await db.execute("UPDATE reminders SET priority_v2 = 'normal' WHERE priority = 'later' OR priority IS NULL"); } catch (_) {}
     }
   }
 
@@ -150,20 +167,25 @@ class DatabaseService {
     await db.execute(
         'CREATE UNIQUE INDEX idx_contacts_owner_email ON contacts(owner_id, email_lookup) WHERE email_lookup IS NOT NULL');
 
-    // ----- REMINDERS -----
+    // ----- REMINDERS (v5 schema: multi-contact + scheduling) -----
     await db.execute('''
       CREATE TABLE reminders (
         id TEXT PRIMARY KEY,
         owner_id TEXT NOT NULL,
-        contact_id TEXT NOT NULL,
-        title TEXT NOT NULL,
+        contact_id TEXT,
+        contact_ids TEXT NOT NULL DEFAULT '[]',
+        start_date_time TEXT NOT NULL,
+        end_date_time TEXT,
+        repeat_frequency TEXT,
+        note TEXT NOT NULL DEFAULT '',
+        todo_action TEXT NOT NULL DEFAULT 'call',
+        priority_v2 TEXT NOT NULL DEFAULT 'normal',
+        title TEXT,
         description TEXT,
-        due_date TEXT NOT NULL,
+        due_date TEXT,
+        priority TEXT,
         is_completed INTEGER NOT NULL DEFAULT 0,
-        priority TEXT NOT NULL DEFAULT 'soon',
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
+        created_at TEXT NOT NULL
       )
     ''');
     await db.execute('CREATE INDEX idx_reminders_owner ON reminders(owner_id)');
@@ -603,10 +625,14 @@ class DatabaseService {
       'reminders',
       where: 'owner_id = ?',
       whereArgs: [ownerId],
-      orderBy: 'due_date ASC',
+      orderBy: 'start_date_time ASC',
     );
     return rows.map(_reminderFromRow).toList();
   }
+
+  // Alias used by some callers
+  static Future<List<Reminder>> getRemindersForOwner(String ownerId) =>
+      getAllRemindersForOwner(ownerId);
 
   static Future<void> insertReminder(Reminder reminder) async {
     final db = await database;
@@ -628,29 +654,106 @@ class DatabaseService {
     await db.delete('reminders', where: 'id = ?', whereArgs: [id]);
   }
 
-  static Map<String, dynamic> _reminderToRow(Reminder r) => {
-        'id': r.id,
-        'owner_id': r.ownerId,
-        'contact_id': r.contactId,
-        'title': r.title,
-        'description': r.description,
-        'due_date': r.dueDate.toIso8601String(),
-        'is_completed': r.isCompleted ? 1 : 0,
-        'priority': r.priority,
-        'created_at': r.createdAt.toIso8601String(),
-      };
+  static Map<String, dynamic> _reminderToRow(Reminder r) {
+    // Legacy priority mirror for backward compat
+    String legacyPriority;
+    switch (r.priority) {
+      case 'very_important':
+        legacyPriority = 'urgent';
+        break;
+      case 'important':
+        legacyPriority = 'soon';
+        break;
+      default:
+        legacyPriority = 'later';
+    }
+    return {
+      'id': r.id,
+      'owner_id': r.ownerId,
+      'contact_id': r.contactIds.isNotEmpty ? r.contactIds.first : null,
+      'contact_ids': jsonEncode(r.contactIds),
+      'start_date_time': r.startDateTime.toIso8601String(),
+      'end_date_time': r.endDateTime?.toIso8601String(),
+      'repeat_frequency': r.repeatFrequency,
+      'note': r.note,
+      'todo_action': r.toDoAction,
+      'priority_v2': r.priority,
+      'is_completed': r.isCompleted ? 1 : 0,
+      'created_at': r.createdAt.toIso8601String(),
+      // Legacy mirrors
+      'title': r.note,
+      'description': null,
+      'due_date': r.startDateTime.toIso8601String(),
+      'priority': legacyPriority,
+    };
+  }
 
-  static Reminder _reminderFromRow(Map<String, dynamic> row) => Reminder(
-        id: row['id'] as String,
-        ownerId: row['owner_id'] as String? ?? '',
-        contactId: row['contact_id'] as String,
-        title: row['title'] as String,
-        description: row['description'] as String?,
-        dueDate: DateTime.parse(row['due_date'] as String),
-        isCompleted: (row['is_completed'] as int) == 1,
-        priority: row['priority'] as String? ?? 'soon',
-        createdAt: DateTime.parse(row['created_at'] as String),
-      );
+  static Reminder _reminderFromRow(Map<String, dynamic> row) {
+    List<String> contactIds = const [];
+    final rawIds = row['contact_ids'] as String?;
+    if (rawIds != null && rawIds.isNotEmpty && rawIds != '[]') {
+      try {
+        final decoded = jsonDecode(rawIds);
+        if (decoded is List) {
+          contactIds = decoded.map((e) => e.toString()).toList();
+        }
+      } catch (_) {}
+    }
+    if (contactIds.isEmpty) {
+      final cid = row['contact_id'] as String?;
+      if (cid != null && cid.isNotEmpty) contactIds = [cid];
+    }
+    if (contactIds.isEmpty) contactIds = ['orphan'];
+
+    DateTime parseDt(dynamic v) {
+      if (v == null) return DateTime.now();
+      if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
+      if (v is String) {
+        try { return DateTime.parse(v); } catch (_) {
+          final asInt = int.tryParse(v);
+          if (asInt != null) return DateTime.fromMillisecondsSinceEpoch(asInt);
+        }
+      }
+      return DateTime.now();
+    }
+
+    final startRaw = row['start_date_time'] ?? row['due_date'];
+    final endRaw = row['end_date_time'];
+
+    final note = (row['note'] as String?)?.isNotEmpty == true
+        ? row['note'] as String
+        : (row['title'] as String? ?? '');
+
+    String priority = (row['priority_v2'] as String?) ?? '';
+    if (priority.isEmpty) {
+      // fall back to legacy priority mapping
+      final legacy = row['priority'] as String? ?? 'later';
+      switch (legacy) {
+        case 'urgent':
+          priority = 'very_important';
+          break;
+        case 'soon':
+          priority = 'important';
+          break;
+        default:
+          priority = 'normal';
+      }
+    }
+
+    return Reminder(
+      id: row['id'] as String,
+      ownerId: row['owner_id'] as String? ?? '',
+      contactIds: contactIds,
+      startDateTime: parseDt(startRaw),
+      endDateTime: endRaw == null ? null : parseDt(endRaw),
+      repeatFrequency: row['repeat_frequency'] as String?,
+      note: note,
+      toDoAction: (row['todo_action'] as String?) ?? 'call',
+      priority: priority,
+      isCompleted: (row['is_completed'] as int? ?? 0) == 1,
+      createdAt: parseDt(row['created_at']),
+    );
+  }
 
   // =====================================================================
   // INTERACTIONS

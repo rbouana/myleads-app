@@ -9,42 +9,54 @@ const _uuid = Uuid();
 
 class RemindersState {
   final List<Reminder> reminders;
-  final String activeTab; // 'today', 'overdue', 'week'
+  final String activeTab;
 
   const RemindersState({
     this.reminders = const [],
     this.activeTab = 'today',
   });
 
-  List<Reminder> get todayReminders =>
-      reminders.where((r) => r.isToday && !r.isCompleted).toList();
-
-  List<Reminder> get overdueReminders =>
-      reminders.where((r) => r.isOverdue).toList();
-
-  List<Reminder> get weekReminders =>
-      reminders.where((r) => r.isThisWeek && !r.isCompleted).toList();
-
-  List<Reminder> get completedReminders =>
-      reminders.where((r) => r.isCompleted).toList();
-
-  List<Reminder> get activeReminders {
-    switch (activeTab) {
-      case 'today':
-        return todayReminders;
-      case 'overdue':
-        return overdueReminders;
-      case 'week':
-        return weekReminders;
-      default:
-        return todayReminders;
-    }
+  List<Reminder> get todayReminders {
+    final list = reminders.where((r) => r.isToday && !r.isCompleted).toList();
+    list.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    return list;
   }
 
-  RemindersState copyWith({
-    List<Reminder>? reminders,
-    String? activeTab,
-  }) {
+  List<Reminder> get weekReminders {
+    final list = reminders.where((r) => r.isThisWeek && !r.isToday && !r.isCompleted).toList();
+    list.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    return list;
+  }
+
+  List<Reminder> get laterReminders {
+    final list = reminders.where((r) => r.isLater && !r.isCompleted).toList();
+    list.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    return list;
+  }
+
+  List<Reminder> get lateReminders {
+    final list = reminders.where((r) => r.isLate && !r.isCompleted).toList();
+    list.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    return list;
+  }
+
+  List<Reminder> get doneReminders {
+    final list = reminders.where((r) => r.isCompleted).toList();
+    list.sort((a, b) => b.sortKey.compareTo(a.sortKey));
+    return list;
+  }
+
+  // Backward compat
+  List<Reminder> get overdueReminders => lateReminders;
+  List<Reminder> get completedReminders => doneReminders;
+
+  List<Reminder> getRemindersForContact(String contactId) {
+    final list = reminders.where((r) => r.contactIds.contains(contactId)).toList();
+    list.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    return list;
+  }
+
+  RemindersState copyWith({List<Reminder>? reminders, String? activeTab}) {
     return RemindersState(
       reminders: reminders ?? this.reminders,
       activeTab: activeTab ?? this.activeTab,
@@ -54,110 +66,67 @@ class RemindersState {
 
 class RemindersNotifier extends StateNotifier<RemindersState> {
   RemindersNotifier() : super(const RemindersState()) {
-    _loadReminders();
+    _load();
   }
 
-  String get _ownerId => StorageService.currentUserId;
-
-  Future<void> _loadReminders() async {
-    if (_ownerId.isEmpty) {
-      state = state.copyWith(reminders: []);
-      return;
-    }
-    final reminders = await StorageService.getAllReminders();
-    if (reminders.isEmpty) {
-      await _seedDemoData();
-    } else {
-      state = state.copyWith(reminders: reminders);
-    }
-  }
-
-  Future<void> reload() => _loadReminders();
-
-  Future<void> _seedDemoData() async {
-    final ownerId = _ownerId;
+  Future<void> _load() async {
+    final ownerId = StorageService.currentUserId;
     if (ownerId.isEmpty) return;
-    final now = DateTime.now();
-    final demoReminders = [
-      Reminder(
-        id: _uuid.v4(),
-        ownerId: ownerId,
-        contactId: '',
-        title: 'Envoyer proposition commerciale',
-        description: 'Karen Ambassa - GreenTech Cameroon',
-        dueDate: DateTime(now.year, now.month, now.day, 10, 0),
-        priority: 'urgent',
-      ),
-      Reminder(
-        id: _uuid.v4(),
-        ownerId: ownerId,
-        contactId: '',
-        title: 'Relance après meeting',
-        description: 'Mike Investor - TechFund Africa',
-        dueDate: DateTime(now.year, now.month, now.day, 14, 30),
-        priority: 'soon',
-      ),
-      Reminder(
-        id: _uuid.v4(),
-        ownerId: ownerId,
-        contactId: '',
-        title: 'Démo technique',
-        description: 'Thomas Matouke - Digitech Solutions',
-        dueDate: DateTime(now.year, now.month, now.day, 17, 0),
-        priority: 'later',
-      ),
-    ];
+    final list = await DatabaseService.getAllRemindersForOwner(ownerId);
+    state = state.copyWith(reminders: list);
+  }
 
-    for (final r in demoReminders) {
-      await DatabaseService.insertReminder(r);
-    }
-    state = state.copyWith(reminders: demoReminders);
+  Future<Reminder> addReminder({
+    required List<String> contactIds,
+    required DateTime startDateTime,
+    DateTime? endDateTime,
+    String? repeatFrequency,
+    required String note,
+    String toDoAction = 'call',
+    String priority = 'normal',
+  }) async {
+    final ownerId = StorageService.currentUserId;
+    final r = Reminder(
+      id: _uuid.v4(),
+      ownerId: ownerId,
+      contactIds: contactIds,
+      startDateTime: startDateTime,
+      endDateTime: endDateTime,
+      repeatFrequency: repeatFrequency,
+      note: note,
+      toDoAction: toDoAction,
+      priority: priority,
+    );
+    await DatabaseService.insertReminder(r);
+    state = state.copyWith(reminders: [...state.reminders, r]);
+    return r;
+  }
+
+  Future<void> updateReminder(Reminder reminder) async {
+    await DatabaseService.updateReminder(reminder);
+    state = state.copyWith(
+      reminders: state.reminders.map((r) => r.id == reminder.id ? reminder : r).toList(),
+    );
+  }
+
+  Future<void> completeReminder(String id) async {
+    final reminder = state.reminders.firstWhere((r) => r.id == id);
+    final updated = reminder.copyWith(isCompleted: true);
+    await updateReminder(updated);
+  }
+
+  Future<void> deleteReminder(String id) async {
+    await DatabaseService.deleteReminder(id);
+    state = state.copyWith(reminders: state.reminders.where((r) => r.id != id).toList());
   }
 
   void setActiveTab(String tab) {
     state = state.copyWith(activeTab: tab);
   }
 
-  Future<void> addReminder(Reminder reminder) async {
-    final newReminder = reminder.copyWith(
-      id: _uuid.v4(),
-      ownerId: _ownerId,
-    );
-    await DatabaseService.insertReminder(newReminder);
-    state = state.copyWith(
-      reminders: [...state.reminders, newReminder],
-    );
-  }
-
-  Future<void> completeReminder(String id) async {
-    final updated = <Reminder>[];
-    for (final r in state.reminders) {
-      if (r.id == id) {
-        final done = r.copyWith(isCompleted: true);
-        await DatabaseService.updateReminder(done);
-        updated.add(done);
-      } else {
-        updated.add(r);
-      }
-    }
-    state = state.copyWith(reminders: updated);
-  }
-
-  Future<void> deleteReminder(String id) async {
-    await DatabaseService.deleteReminder(id);
-    state = state.copyWith(
-      reminders: state.reminders.where((r) => r.id != id).toList(),
-    );
-  }
-
-  List<Reminder> getRemindersForContact(String contactId) {
-    return state.reminders
-        .where((r) => r.contactId == contactId && !r.isCompleted)
-        .toList();
-  }
+  Future<void> refresh() => _load();
 }
 
-final remindersProvider =
-    StateNotifierProvider<RemindersNotifier, RemindersState>((ref) {
+final remindersProvider = StateNotifierProvider<RemindersNotifier, RemindersState>((ref) {
   return RemindersNotifier();
 });

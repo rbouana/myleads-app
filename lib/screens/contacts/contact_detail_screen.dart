@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +11,9 @@ import '../../models/contact.dart';
 import '../../models/interaction.dart';
 import '../../providers/contacts_provider.dart';
 import '../../services/contact_actions.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import '../../providers/reminders_provider.dart';
+import '../reminders/reminder_detail_screen.dart';
 
 class ContactDetailScreen extends ConsumerStatefulWidget {
   final String contactId;
@@ -302,6 +305,115 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 ),
               ),
 
+
+            // QR Code Section
+            _buildSection(
+              'QR Code',
+              Center(
+                child: QrImageView(
+                  data: [
+                    'Prénom: ${contact.firstName}',
+                    'Nom: ${contact.lastName}',
+                    'Fonction: ${contact.jobTitle ?? ""}',
+                    'Société: ${contact.company ?? ""}',
+                    'Téléphone: ${contact.phone ?? ""}',
+                    'Source: ${contact.source ?? ""}',
+                    'Projet 1: ${contact.project1 ?? ""}',
+                    'Budget 1: ${contact.project1Budget ?? ""}',
+                    'Projet 2: ${contact.project2 ?? ""}',
+                    'Budget 2: ${contact.project2Budget ?? ""}',
+                    'Tags: ${contact.tags.join(", ")}',
+                    'Notes: ${contact.notes ?? ""}',
+                  ].join('\n'),
+                  version: QrVersions.auto,
+                  size: 200,
+                ),
+              ),
+            ),
+
+            // Rappels Section
+            Builder(
+              builder: (context) {
+                final reminders = ref
+                    .watch(remindersProvider)
+                    .getRemindersForContact(contact.id);
+                final shown = reminders.take(3).toList();
+                if (shown.isEmpty) return const SizedBox.shrink();
+                return _buildSection(
+                  'Rappels',
+                  Column(
+                    children: shown.map((reminder) {
+                      Color priorityColor;
+                      switch (reminder.priority) {
+                        case 'very_important':
+                          priorityColor = AppColors.hot;
+                          break;
+                        case 'important':
+                          priorityColor = AppColors.warm;
+                          break;
+                        default:
+                          priorityColor = AppColors.success;
+                      }
+                      return GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ProviderScope(parent: ProviderScope.containerOf(context), child: ReminderDetailScreen(reminderId: reminder.id)),
+                          ),
+                        ),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 4,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: priorityColor,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      reminder.note,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textDark,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      DateFormat("dd MMM yyyy HH:mm").format(reminder.startDateTime),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textLight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right,
+                                  color: AppColors.textLight, size: 18),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                );
+              },
+            ),
             // History Section
             if (_interactions.isNotEmpty)
               _buildSection(
@@ -643,3 +755,5 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     }
   }
 }
+
+

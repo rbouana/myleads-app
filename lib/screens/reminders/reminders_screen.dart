@@ -1,344 +1,345 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../../core/theme/app_colors.dart';
-import '../../core/constants/app_strings.dart';
 import '../../models/reminder.dart';
+import '../../providers/contacts_provider.dart';
 import '../../providers/reminders_provider.dart';
 import '../../services/calendar_service.dart';
+import 'create_reminder_screen.dart';
+import 'reminder_detail_screen.dart';
 
-class RemindersScreen extends ConsumerWidget {
+class RemindersScreen extends ConsumerStatefulWidget {
   const RemindersScreen({super.key});
+  @override
+  ConsumerState<RemindersScreen> createState() => _RemindersScreenState();
+}
+
+class _RemindersScreenState extends ConsumerState<RemindersScreen> {
+  String _activeTab = 'today';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.watch(remindersProvider);
-    final reminders = state.activeReminders;
+    List<Reminder> current;
+    switch (_activeTab) {
+      case 'week':
+        current = state.weekReminders;
+        break;
+      case 'later':
+        current = state.laterReminders;
+        break;
+      case 'late':
+        current = state.lateReminders;
+        break;
+      case 'done':
+        current = state.doneReminders;
+        break;
+      default:
+        current = state.todayReminders;
+    }
+
+    final tabs = <(String, String, int)>[
+      ('today', "Aujourd'hui", state.todayReminders.length),
+      ('week', 'Semaine', state.weekReminders.length),
+      ('later', 'Plus tard', state.laterReminders.length),
+      ('late', 'En retard', state.lateReminders.length),
+      ('done', 'Termines', state.doneReminders.length),
+    ];
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          // Header
-          Container(
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 10,
-              left: 24,
-              right: 24,
-              bottom: 24,
-            ),
-            decoration: const BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(32),
-                bottomRight: Radius.circular(32),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProviderScope(
+                parent: ProviderScope.containerOf(context),
+                child: const CreateReminderScreen(),
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  AppStrings.remindersTitle,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
+          );
+        },
+        child: const Icon(Icons.add_rounded),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.notifications_rounded, color: Colors.white),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  AppStrings.remindersSubtitle,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Tabs
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                _buildTab(
-                  ref,
-                  state.todayReminders.length.toString(),
-                  AppStrings.today,
-                  'today',
-                  state.activeTab,
-                ),
-                const SizedBox(width: 8),
-                _buildTab(
-                  ref,
-                  state.overdueReminders.length.toString(),
-                  AppStrings.overdue,
-                  'overdue',
-                  state.activeTab,
-                  isOverdue: true,
-                ),
-                const SizedBox(width: 8),
-                _buildTab(
-                  ref,
-                  state.weekReminders.length.toString(),
-                  AppStrings.thisWeek,
-                  'week',
-                  state.activeTab,
-                ),
-              ],
-            ),
-          ),
-
-          // Reminders List
-          Expanded(
-            child: reminders.isEmpty
-                ? Center(
+                  const SizedBox(width: 12),
+                  const Expanded(
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.check_circle_outline,
-                            size: 64, color: AppColors.success.withOpacity(0.4)),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Tout est à jour !',
-                          style: TextStyle(
-                            color: AppColors.textMid,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        Text('Rappels',
+                            style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textDark)),
+                        Text('Vos taches et suivis',
+                            style: TextStyle(fontSize: 13, color: AppColors.textMid)),
                       ],
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    itemCount: reminders.length,
-                    itemBuilder: (context, index) {
-                      return _buildReminderItem(context, ref, reminders[index]);
-                    },
                   ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTab(
-    WidgetRef ref,
-    String count,
-    String label,
-    String value,
-    String active, {
-    bool isOverdue = false,
-  }) {
-    final isActive = active == value;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => ref.read(remindersProvider.notifier).setActiveTab(value),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isActive ? AppColors.primary : AppColors.card,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isActive ? AppColors.primary : AppColors.border,
-              width: 2,
+                ],
+              ),
             ),
-          ),
-          child: Column(
-            children: [
-              Text(
-                count,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: isActive
-                      ? Colors.white
-                      : isOverdue
-                          ? AppColors.hot
-                          : AppColors.textDark,
-                ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 44,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: tabs.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final t = tabs[i];
+                  final active = t.$1 == _activeTab;
+                  return GestureDetector(
+                    onTap: () => setState(() => _activeTab = t.$1),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: active ? AppColors.primaryGradient : null,
+                        color: active ? null : AppColors.card,
+                        borderRadius: BorderRadius.circular(22),
+                        border: active ? null : Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(t.$2,
+                              style: TextStyle(
+                                color: active ? Colors.white : AppColors.textMid,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              )),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? Colors.white.withOpacity(0.25)
+                                  : AppColors.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text('${t.$3}',
+                                style: TextStyle(
+                                  color: active ? Colors.white : AppColors.primary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                )),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: isActive
-                      ? Colors.white.withOpacity(0.6)
-                      : AppColors.textMid,
-                ),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: current.isEmpty
+                  ? _buildEmpty()
+                  : RefreshIndicator(
+                      onRefresh: () => ref.read(remindersProvider.notifier).refresh(),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                        itemCount: current.length,
+                        itemBuilder: (_, i) => _ReminderCard(reminder: current[i]),
+                      ),
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildReminderItem(BuildContext context, WidgetRef ref, Reminder reminder) {
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: const Icon(Icons.notifications_off_outlined,
+                size: 36, color: AppColors.primary),
+          ),
+          const SizedBox(height: 16),
+          const Text('Aucun rappel',
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+          const SizedBox(height: 6),
+          const Text('Appuyez sur + pour en creer un.',
+              style: TextStyle(fontSize: 13, color: AppColors.textMid)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReminderCard extends ConsumerWidget {
+  final Reminder reminder;
+  const _ReminderCard({required this.reminder});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     Color priorityColor;
     switch (reminder.priority) {
-      case 'urgent':
+      case 'very_important':
         priorityColor = AppColors.hot;
         break;
-      case 'soon':
+      case 'important':
         priorityColor = AppColors.warm;
         break;
       default:
         priorityColor = AppColors.success;
     }
+    IconData actionIcon;
+    switch (reminder.toDoAction) {
+      case 'sms':
+        actionIcon = Icons.sms_rounded;
+        break;
+      case 'whatsapp':
+        actionIcon = Icons.chat_rounded;
+        break;
+      case 'email':
+        actionIcon = Icons.email_rounded;
+        break;
+      default:
+        actionIcon = Icons.phone_rounded;
+    }
 
-    final timeText = reminder.isOverdue
-        ? 'En retard'
-        : DateFormat('HH:mm').format(reminder.dueDate);
+    final contacts = ref.watch(contactsProvider).contacts;
+    final linked = contacts.where((c) => reminder.contactIds.contains(c.id)).toList();
+    final contactLabel = linked.isEmpty
+        ? 'Contact supprime'
+        : linked.length == 1
+            ? linked.first.fullName
+            : '${linked.first.fullName} +${linked.length - 1}';
 
-    return Dismissible(
-      key: Key(reminder.id),
-      direction: DismissDirection.endToStart,
-      onDismissed: (_) {
-        ref.read(remindersProvider.notifier).completeReminder(reminder.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Rappel terminé !')),
-        );
-      },
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: AppColors.success,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Icon(Icons.check, color: Colors.white, size: 28),
+    final dateLabel = DateFormat('dd MMM HH:mm').format(reminder.startDateTime);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
       ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withOpacity(0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Left border indicator
-            Container(
-              width: 4,
-              height: 50,
-              decoration: BoxDecoration(
-                color: priorityColor,
-                borderRadius: BorderRadius.circular(2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProviderScope(
+                parent: ProviderScope.containerOf(context),
+                child: ReminderDetailScreen(reminderId: reminder.id),
               ),
             ),
-            const SizedBox(width: 14),
-
-            // Avatar
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [priorityColor, priorityColor.withOpacity(0.7)],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 48,
+                  decoration: BoxDecoration(
+                      color: priorityColor, borderRadius: BorderRadius.circular(4)),
                 ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Text(
-                  reminder.description?.split(' ').take(2).map((w) => w.isNotEmpty ? w[0] : '').join() ?? '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                const SizedBox(width: 12),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: priorityColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: Icon(actionIcon, color: priorityColor, size: 20),
                 ),
-              ),
-            ),
-            const SizedBox(width: 14),
-
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    reminder.title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  if (reminder.description != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      reminder.description!,
-                      style: const TextStyle(fontSize: 12, color: AppColors.textMid),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            // Calendar sync button
-            GestureDetector(
-              onTap: () {
-                CalendarService.addReminderToCalendar(reminder);
-                ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    SnackBar(
-                      content: const Row(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        reminder.note,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textDark),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
                         children: [
-                          Icon(Icons.calendar_month, color: Colors.white, size: 18),
-                          SizedBox(width: 8),
-                          Text('Ajouté au calendrier'),
+                          const Icon(Icons.person_outline_rounded,
+                              size: 12, color: AppColors.textLight),
+                          const SizedBox(width: 3),
+                          Expanded(
+                              child: Text(contactLabel,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: AppColors.textMid))),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.access_time_rounded,
+                              size: 12, color: AppColors.textLight),
+                          const SizedBox(width: 3),
+                          Text(dateLabel,
+                              style: const TextStyle(fontSize: 11, color: AppColors.textMid)),
                         ],
                       ),
-                      backgroundColor: AppColors.primary,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  );
-              },
-              child: Container(
-                width: 36,
-                height: 36,
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(10),
+                    ],
+                  ),
                 ),
-                child: const Icon(Icons.calendar_month, size: 18, color: AppColors.primary),
-              ),
-            ),
-
-            // Time badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: priorityColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                timeText,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: priorityColor,
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    CalendarService.addReminderToCalendar(reminder);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Ajoute au calendrier'),
+                          backgroundColor: AppColors.primary),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.calendar_month_rounded,
+                        size: 16, color: AppColors.primary),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

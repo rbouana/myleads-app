@@ -7,11 +7,11 @@ class CalendarService {
 
   static Future<void> addReminderToCalendar(Reminder reminder) async {
     final event = Event(
-      title: reminder.title,
-      description: reminder.description ?? '',
+      title: reminder.note,
+      description: reminder.note,
       location: '',
-      startDate: reminder.dueDate,
-      endDate: reminder.dueDate.add(const Duration(minutes: 30)),
+      startDate: reminder.startDateTime,
+      endDate: reminder.endDateTime ?? reminder.startDateTime.add(const Duration(hours: 1)),
       allDay: false,
       iosParams: const IOSParams(reminder: Duration(minutes: 15)),
       androidParams: const AndroidParams(emailInvites: []),

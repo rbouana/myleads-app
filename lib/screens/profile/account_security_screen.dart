@@ -29,6 +29,16 @@ class _AccountSecurityScreenState
   bool _isChanging = false;
   String? _changeError;
 
+  // Email change state
+  final _emailFormKey = GlobalKey<FormState>();
+  final _emailCurrentPwdCtrl = TextEditingController();
+  final _newEmailCtrl = TextEditingController();
+  final _verificationCodeCtrl = TextEditingController();
+  bool _codeSent = false;
+  bool _isSendingCode = false;
+  bool _isConfirmingEmail = false;
+  String? _emailChangeError;
+
   // Password regex: 8-15 chars, at least 1 letter, 1 digit, 1 symbol, no spaces
   static final _pwdRegex =
       RegExp(r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#\$%^&*()_+\-=\[\]{};:\\|,.<>\/?])[^\s]{8,15}$');
@@ -38,6 +48,9 @@ class _AccountSecurityScreenState
     _currentPwdCtrl.dispose();
     _newPwdCtrl.dispose();
     _confirmPwdCtrl.dispose();
+    _emailCurrentPwdCtrl.dispose();
+    _newEmailCtrl.dispose();
+    _verificationCodeCtrl.dispose();
     super.dispose();
   }
 
@@ -89,6 +102,50 @@ class _AccountSecurityScreenState
     await ref.read(contactsProvider.notifier).reload();
     await ref.read(remindersProvider.notifier).reload();
     if (mounted) context.go('/login');
+  }
+
+  Future<void> _onSendVerificationCode() async {
+    if (!(_emailFormKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _isSendingCode = true;
+      _emailChangeError = null;
+    });
+    try {
+      await ref.read(authProvider.notifier).sendVerificationCode(_newEmailCtrl.text.trim());
+      if (mounted) {
+        setState(() {
+          _codeSent = true;
+          _isSendingCode = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSendingCode = false;
+          _emailChangeError = e.toString();
+        });
+      }
+    }
+  }
+
+  Future<void> _onConfirmEmailChange() async {
+    setState(() {
+      _isConfirmingEmail = true;
+      _emailChangeError = null;
+    });
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (mounted) {
+      setState(() => _isConfirmingEmail = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Fonctionnalité en cours de développement'),
+          backgroundColor: AppColors.textMid,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
   }
 
   @override
@@ -366,9 +423,60 @@ class _AccountSecurityScreenState
                       ),
                     ),
 
+                    // ── Section 2: Change Email ───────────────
+                    _sectionHeader(icon: Icons.email_rounded, title: AppStrings.changeEmail, color: AppColors.primary),
+                    const SizedBox(height: 12),
+                    Form(key: _emailFormKey, child: Container(
+                      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.07), blurRadius: 20, offset: const Offset(0, 4))]),
+                      padding: const EdgeInsets.all(20),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        _passwordField(label: AppStrings.currentPassword, controller: _emailCurrentPwdCtrl, obscure: true, onToggle: () {}, validator: (v) { if (v == null || v.isEmpty) return 'Mot de passe actuel requis'; return null; }),
+                        const SizedBox(height: 16),
+                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text(AppStrings.newEmail, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMid, letterSpacing: 0.3)),
+                          const SizedBox(height: 6),
+                          TextFormField(controller: _newEmailCtrl, keyboardType: TextInputType.emailAddress, enabled: !_codeSent,
+                            validator: (v) { if (v == null || v.trim().isEmpty) return 'Email requis'; if (!v.contains('@')) return 'Email invalide'; return null; },
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textDark),
+                            decoration: InputDecoration(hintText: 'nouvel@email.com', filled: true, fillColor: AppColors.inputBg, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.accent, width: 1.5)), errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.error)), focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.error, width: 1.5))),
+                          ),
+                        ]),
+                        if (_codeSent) ...[
+                          const SizedBox(height: 16),
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            const Text('Code de vérification', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMid, letterSpacing: 0.3)),
+                            const SizedBox(height: 6),
+                            TextFormField(controller: _verificationCodeCtrl, keyboardType: TextInputType.number, maxLength: 6, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textDark, letterSpacing: 4),
+                              decoration: InputDecoration(hintText: '0000000', counterText: '', filled: true, fillColor: AppColors.inputBg, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.accent, width: 1.5))),
+                            ),
+                          ]),
+                        ],
+                        if (_emailChangeError != null) ...[
+                          const SizedBox(height: 14),
+                          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppColors.error.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.error.withOpacity(0.3))), child: Row(children: [const Icon(Icons.error_outline, size: 16, color: AppColors.error), const SizedBox(width: 8), Expanded(child: Text(_emailChangeError!, style: const TextStyle(fontSize: 13, color: AppColors.error)))])),
+                        ],
+                        const SizedBox(height: 20),
+                        SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
+                          onPressed: _isSendingCode || _isConfirmingEmail ? null : (_codeSent ? _onConfirmEmailChange : _onSendVerificationCode),
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: AppColors.primary, disabledBackgroundColor: AppColors.accent.withOpacity(0.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                          child: (_isSendingCode || _isConfirmingEmail) ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary))
+                              : Text(_codeSent ? 'Confirmer' : AppStrings.sendVerificationCode, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                        )),
+                        if (_codeSent) ...[
+                          const SizedBox(height: 12),
+                          Center(child: GestureDetector(
+                            onTap: () => setState(() { _codeSent = false; _verificationCodeCtrl.clear(); _emailChangeError = null; }),
+                            child: const Text("Changer l'adresse email", style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                          )),
+                        ],
+                      ]),
+                    )),
+
                     const SizedBox(height: 28),
 
-                    // ── Section 2: Delete Account ───────────────────
+                    const SizedBox(height: 28),
+
+                    // ── Section 3: Delete Account ───────────────────
                     _sectionHeader(
                       icon: Icons.warning_amber_rounded,
                       title: AppStrings.deleteAccount,

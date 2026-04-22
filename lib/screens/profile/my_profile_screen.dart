@@ -28,7 +28,6 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
   late final TextEditingController _lastNameCtrl;
   late final TextEditingController _nicknameCtrl;
   late final TextEditingController _phoneCtrl;
-  late final TextEditingController _dobCtrl;
   late final TextEditingController _companyNameCtrl;
   late final TextEditingController _companyRoleCtrl;
   late final TextEditingController _biographyCtrl;
@@ -43,7 +42,6 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     _lastNameCtrl = TextEditingController(text: user?.lastName ?? '');
     _nicknameCtrl = TextEditingController(text: user?.nickname ?? '');
     _phoneCtrl = TextEditingController(text: user?.phone ?? '');
-    _dobCtrl = TextEditingController(text: user?.dateOfBirth ?? '');
     _companyNameCtrl = TextEditingController(text: user?.companyName ?? '');
     _companyRoleCtrl = TextEditingController(text: user?.companyRole ?? '');
     _biographyCtrl = TextEditingController(text: user?.biography ?? '');
@@ -55,7 +53,6 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     _lastNameCtrl.dispose();
     _nicknameCtrl.dispose();
     _phoneCtrl.dispose();
-    _dobCtrl.dispose();
     _companyNameCtrl.dispose();
     _companyRoleCtrl.dispose();
     _biographyCtrl.dispose();
@@ -105,8 +102,6 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
             ? null
             : _nicknameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-        dateOfBirth:
-            _dobCtrl.text.trim().isEmpty ? null : _dobCtrl.text.trim(),
         companyName: _companyNameCtrl.text.trim().isEmpty
             ? null
             : _companyNameCtrl.text.trim(),
@@ -173,7 +168,6 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
       _lastNameCtrl.text = user?.lastName ?? '';
       _nicknameCtrl.text = user?.nickname ?? '';
       _phoneCtrl.text = user?.phone ?? '';
-      _dobCtrl.text = user?.dateOfBirth ?? '';
       _companyNameCtrl.text = user?.companyName ?? '';
       _companyRoleCtrl.text = user?.companyRole ?? '';
       _biographyCtrl.text = user?.biography ?? '';
@@ -184,19 +178,18 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
   String _buildProfileQrData() {
     final user = StorageService.currentUser;
     if (user == null) return '';
-    final buf = StringBuffer();
-    buf.writeln('BEGIN:VCARD');
-    buf.writeln('VERSION:3.0');
-    buf.writeln('FN:${user.fullName}');
-    buf.writeln('N:${user.lastName};${user.firstName};;;');
-    if (user.nickname != null) buf.writeln('NICKNAME:${user.nickname}');
-    if (user.email.isNotEmpty) buf.writeln('EMAIL:${user.email}');
-    if (user.phone != null) buf.writeln('TEL:${user.phone}');
-    if (user.companyName != null) buf.writeln('ORG:${user.companyName}');
-    if (user.companyRole != null) buf.writeln('TITLE:${user.companyRole}');
-    if (user.biography != null) buf.writeln('NOTE:${user.biography}');
-    buf.writeln('END:VCARD');
-    return buf.toString();
+    final lines = [
+      'Prénom: ${user.firstName}',
+      'Nom: ${user.lastName}',
+      'Surnom: ${user.nickname ?? ''}',
+      'Email: ${user.email}',
+      'Téléphone: ${user.phone ?? ''}',
+      'Société: ${user.companyName ?? ''}',
+      'Fonction: ${user.companyRole ?? ''}',
+      'Biographie: ${user.biography ?? ''}',
+    ];
+    return lines.join('
+');
   }
 
   void _shareProfile() {
@@ -453,14 +446,6 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                             controller: _phoneCtrl,
                             keyboardType: TextInputType.phone,
                             hint: '+352 XXX XXX XXX',
-                          ),
-                          _divider(),
-                          _profileField(
-                            label: AppStrings.dateOfBirth,
-                            value: user?.dateOfBirth ?? '—',
-                            controller: _dobCtrl,
-                            hint: 'JJ/MM/AAAA',
-                            keyboardType: TextInputType.datetime,
                           ),
                           _divider(),
                           _profileField(
