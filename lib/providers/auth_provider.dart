@@ -370,6 +370,66 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return null; // success
   }
 
+  /// Changes the user's email, validated by a 6-digit code previously
+  /// sent to the new address via [sendVerificationCode]. Requires the
+  /// current password as an extra safeguard and rotates the session token
+  /// so other devices are forced to log in again.
+  ///
+  /// Returns `null` on success, or an error string on failure.
+  Future<String?> changeEmail(
+      String newEmail, String code, String currentPassword) async {
+    final user = StorageService.currentUser;
+    if (user == null) return 'Aucun utilisateur connecté';
+
+    if (user.authProvider != 'email') {
+      return 'Email non modifiable pour les comptes ${user.authProvider}';
+    }
+
+    // Validate new email format.
+    final emailErr = Validators.validateEmail(newEmail);
+    if (emailErr != null) return emailErr;
+
+    // Check current password.
+    if (!EncryptionService.verifyPassword(currentPassword, user.passwordHash)) {
+      return 'Mot de passe actuel incorrect';
+    }
+
+    // Disallow changing to an email already in use by another account.
+    final newLookup = _emailLookup(newEmail);
+    final existing = await DatabaseService.findUserByEmailLookup(newLookup);
+    if (existing != null && existing.id != user.id) {
+      return 'Cet email est déjà utilisé par un autre compte';
+    }
+
+    // Verify the 6-digit code sent to the new address.
+    final stored = _verificationCodes[newLookup];
+    if (stored == null) {
+      return 'Aucun code de vérification en attente. Veuillez en demander un nouveau.';
+    }
+    if (stored.isExpired) {
+      _verificationCodes.remove(newLookup);
+      return 'Le code a expiré. Veuillez en demander un nouveau.';
+    }
+    if (stored.code != code.trim()) {
+      return 'Code de vérification invalide';
+    }
+
+    // Rotate session token (invalidates other devices) and persist.
+    final newToken = EncryptionService.generateSessionToken();
+    final updated = user.copyWith(
+      email: newEmail.trim(),
+      sessionToken: newToken,
+      emailVerified: true,
+    );
+    await DatabaseService.updateUser(updated);
+    await StorageService.setCurrentSession(updated, newToken);
+
+    // Clear the used code.
+    _verificationCodes.remove(newLookup);
+
+    return null; // success
+  }
+
   /// Update the current user's profile photo path.
   Future<void> updatePhoto(String? photoPath) async {
     final user = StorageService.currentUser;

@@ -133,19 +133,48 @@ class _AccountSecurityScreenState
       _isConfirmingEmail = true;
       _emailChangeError = null;
     });
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (mounted) {
-      setState(() => _isConfirmingEmail = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Fonctionnalité en cours de développement'),
-          backgroundColor: AppColors.textMid,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+
+    final error = await ref.read(authProvider.notifier).changeEmail(
+          _newEmailCtrl.text.trim(),
+          _verificationCodeCtrl.text.trim(),
+          _emailCurrentPwdCtrl.text,
+        );
+
+    if (!mounted) return;
+
+    if (error != null) {
+      setState(() {
+        _isConfirmingEmail = false;
+        _emailChangeError = error;
+      });
+      return;
     }
+
+    // Success: toast, logout, navigate to /login
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            Icon(Icons.check_circle, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Expanded(child: Text('Email modifié avec succès')),
+          ],
+        ),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    await ref.read(authProvider.notifier).logout();
+    await ref.read(contactsProvider.notifier).reload();
+    await ref.read(remindersProvider.notifier).reload();
+    if (mounted) context.go('/login');
   }
 
   @override

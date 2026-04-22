@@ -54,6 +54,16 @@ class HomeScreen extends ConsumerWidget {
                     hotLeadsCount: contactsState.hotLeads,
                     remindersCount: remindersState.todayReminders.length +
                         remindersState.overdueReminders.length,
+                    onContactsTap: () {
+                      ref.read(contactsProvider.notifier).setFilter('all');
+                      ref.read(currentTabProvider.notifier).state = 1;
+                    },
+                    onHotLeadsTap: () {
+                      ref.read(contactsProvider.notifier).setFilter('hot');
+                      ref.read(currentTabProvider.notifier).state = 1;
+                    },
+                    onRemindersTap: () =>
+                        ref.read(currentTabProvider.notifier).state = 3,
                   ),
                   const SizedBox(height: 28),
 
@@ -186,17 +196,15 @@ class _Header extends ConsumerWidget {
             height: 48,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: AppColors.white.withOpacity(0.15),
+              color: AppColors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppColors.white.withOpacity(0.12),
-              ),
+              border: Border.all(color: AppColors.border),
             ),
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.search_rounded,
-                  color: AppColors.white.withOpacity(0.6),
+                  color: AppColors.textLight,
                   size: 20,
                 ),
                 const SizedBox(width: 12),
@@ -207,15 +215,15 @@ class _Header extends ConsumerWidget {
                     textInputAction: TextInputAction.search,
                     style: const TextStyle(
                       fontSize: 14,
-                      color: AppColors.white,
+                      color: Colors.black,
                       fontWeight: FontWeight.w500,
                     ),
-                    cursorColor: AppColors.white,
+                    cursorColor: AppColors.primary,
                     decoration: InputDecoration(
                       hintText: AppStrings.searchContact,
-                      hintStyle: TextStyle(
+                      hintStyle: const TextStyle(
                         fontSize: 14,
-                        color: AppColors.white.withOpacity(0.5),
+                        color: AppColors.textLight,
                         fontWeight: FontWeight.w400,
                       ),
                       border: InputBorder.none,
@@ -419,11 +427,17 @@ class _StatsRow extends StatelessWidget {
   final int totalContacts;
   final int hotLeadsCount;
   final int remindersCount;
+  final VoidCallback onContactsTap;
+  final VoidCallback onHotLeadsTap;
+  final VoidCallback onRemindersTap;
 
   const _StatsRow({
     required this.totalContacts,
     required this.hotLeadsCount,
     required this.remindersCount,
+    required this.onContactsTap,
+    required this.onHotLeadsTap,
+    required this.onRemindersTap,
   });
 
   @override
@@ -436,6 +450,7 @@ class _StatsRow extends StatelessWidget {
             value: totalContacts.toString(),
             icon: Icons.people_alt_rounded,
             color: AppColors.primary,
+            onTap: onContactsTap,
           ),
         ),
         const SizedBox(width: 12),
@@ -445,6 +460,7 @@ class _StatsRow extends StatelessWidget {
             value: hotLeadsCount.toString(),
             icon: Icons.local_fire_department_rounded,
             color: AppColors.hot,
+            onTap: onHotLeadsTap,
           ),
         ),
         const SizedBox(width: 12),
@@ -454,6 +470,7 @@ class _StatsRow extends StatelessWidget {
             value: remindersCount.toString(),
             icon: Icons.notifications_active_rounded,
             color: AppColors.warm,
+            onTap: onRemindersTap,
           ),
         ),
       ],
@@ -466,17 +483,19 @@ class _StatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.label,
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -516,6 +535,16 @@ class _StatCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: card,
       ),
     );
   }

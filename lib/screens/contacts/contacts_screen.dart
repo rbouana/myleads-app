@@ -71,28 +71,30 @@ class ContactsScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.search, color: Colors.white.withOpacity(0.4), size: 20),
+                      const Icon(Icons.search, color: AppColors.textLight, size: 20),
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
                           onChanged: (v) =>
                               ref.read(contactsProvider.notifier).setSearchQuery(v),
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
-                          decoration: InputDecoration(
+                          style: const TextStyle(color: Colors.black, fontSize: 14),
+                          cursorColor: AppColors.primary,
+                          decoration: const InputDecoration(
                             hintText: AppStrings.searchContact,
                             hintStyle: TextStyle(
-                              color: Colors.white.withOpacity(0.4),
+                              color: AppColors.textLight,
                               fontSize: 14,
                             ),
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                            contentPadding: EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
                       ),
