@@ -41,14 +41,33 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     _companyCtrl = TextEditingController(text: d['company'] ?? (hasOcr ? '' : 'GreenTech Cameroon'));
     _phoneCtrl = TextEditingController(text: d['phone'] ?? (hasOcr ? '' : '+237 6 99 88 77 66'));
     _emailCtrl = TextEditingController(text: d['email'] ?? (hasOcr ? '' : 'karen@greentech.cm'));
-    _sourceCtrl = TextEditingController(text: hasOcr ? '' : 'Salon Luxembourg 2026');
-    _project1Ctrl = TextEditingController(text: hasOcr ? '' : 'Partenariat Tech');
-    _project1BudgetCtrl = TextEditingController(text: hasOcr ? '' : '15 000 €');
-    _project2Ctrl = TextEditingController();
-    _project2BudgetCtrl = TextEditingController();
+    _sourceCtrl = TextEditingController(
+        text: d['source'] ?? (hasOcr ? '' : 'Salon Luxembourg 2026'));
+    _project1Ctrl = TextEditingController(
+        text: d['project1'] ?? (hasOcr ? '' : 'Partenariat Tech'));
+    _project1BudgetCtrl = TextEditingController(
+        text: d['project1Budget'] ?? (hasOcr ? '' : '15 000 €'));
+    _project2Ctrl = TextEditingController(text: d['project2'] ?? '');
+    _project2BudgetCtrl = TextEditingController(text: d['project2Budget'] ?? '');
     _notesCtrl = TextEditingController(
-        text: hasOcr ? '' : 'Rencontrée au salon Luxembourg. Intéressée par un partenariat.');
+        text: d['notes'] ??
+            (hasOcr
+                ? ''
+                : 'Rencontrée au salon Luxembourg. Intéressée par un partenariat.'));
     _photoPath = d['photoPath'];
+
+    // Pre-select tags found by OCR (comma-separated).
+    final parsedTags = (d['tags'] ?? '')
+        .split(',')
+        .map((t) => t.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+    if (parsedTags.isNotEmpty) {
+      for (final t in parsedTags) {
+        if (!_availableTags.contains(t)) _availableTags.add(t);
+        _selectedTags.add(t);
+      }
+    }
   }
 
   final List<String> _availableTags = [

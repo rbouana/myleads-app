@@ -331,6 +331,20 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               ),
             ),
 
+            // Notes Section (shown before Rappels so users see the context first)
+            if (contact.notes != null && contact.notes!.isNotEmpty)
+              _buildSection(
+                AppStrings.notes,
+                Text(
+                  contact.notes!,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textMid,
+                    height: 1.6,
+                  ),
+                ),
+              ),
+
             // Rappels Section
             Builder(
               builder: (context) {
@@ -420,20 +434,6 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 AppStrings.history,
                 Column(
                   children: _interactions.map(_timelineItem).toList(),
-                ),
-              ),
-
-            // Notes Section
-            if (contact.notes != null && contact.notes!.isNotEmpty)
-              _buildSection(
-                AppStrings.notes,
-                Text(
-                  contact.notes!,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textMid,
-                    height: 1.6,
-                  ),
                 ),
               ),
 

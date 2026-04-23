@@ -144,7 +144,7 @@ class ContactsScreen extends ConsumerWidget {
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
                     itemCount: contacts.length,
                     itemBuilder: (context, index) {
                       return _buildContactItem(context, contacts[index]);
@@ -298,6 +298,12 @@ class ContactsScreen extends ConsumerWidget {
                   Icons.phone,
                   AppColors.success,
                   () => ContactActions.call(ctx, contact),
+                ),
+                const SizedBox(height: 6),
+                _buildMiniAction(
+                  Icons.sms_rounded,
+                  AppColors.warm,
+                  () => ContactActions.sms(ctx, contact),
                 ),
                 const SizedBox(height: 6),
                 _buildMiniAction(

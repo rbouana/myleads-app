@@ -200,7 +200,7 @@ class ProfileScreen extends ConsumerWidget {
                     AppStrings.notificationsDesc,
                     AppColors.accent.withOpacity(0.1),
                     AppColors.accent,
-                    () {},
+                    () => context.push('/notifications'),
                   ),
                   _menuItem(
                     Icons.star,

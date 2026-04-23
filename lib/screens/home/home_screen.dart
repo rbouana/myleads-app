@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,8 +28,9 @@ class HomeScreen extends ConsumerWidget {
         children: [
           // -- Header --
           _Header(
-            notificationCount: 3,
-            onNotificationTap: () {},
+            notificationCount: remindersState.todayReminders.length +
+                remindersState.lateReminders.length,
+            onNotificationTap: () => context.push('/notifications'),
             onSearchChanged: (q) =>
                 ref.read(contactsProvider.notifier).setSearchQuery(q),
             onSearchSubmitted: () =>
@@ -628,24 +632,34 @@ class _HotLeadCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar with gradient
+            // Avatar with gradient or photo
             Container(
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                gradient: AppColors.avatarGradient(contact.status),
+                gradient: contact.photoPath == null || kIsWeb
+                    ? AppColors.avatarGradient(contact.status)
+                    : null,
                 borderRadius: BorderRadius.circular(14),
+                image: contact.photoPath != null && !kIsWeb
+                    ? DecorationImage(
+                        image: FileImage(File(contact.photoPath!)),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
               ),
-              child: Center(
-                child: Text(
-                  contact.initials,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.white,
-                  ),
-                ),
-              ),
+              child: contact.photoPath == null || kIsWeb
+                  ? Center(
+                      child: Text(
+                        contact.initials,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.white,
+                        ),
+                      ),
+                    )
+                  : null,
             ),
             const SizedBox(width: 14),
             // Name + company

@@ -17,6 +17,7 @@ import '../../screens/profile/my_profile_screen.dart';
 import '../../screens/profile/account_security_screen.dart';
 import '../../screens/reminders/create_reminder_screen.dart';
 import '../../screens/reminders/reminder_detail_screen.dart';
+import '../../screens/notifications/notifications_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -284,6 +285,19 @@ final appRouter = GoRouter(
       pageBuilder: (context, state) => CustomTransitionPage(
         key: state.pageKey,
         child: const CreateReminderScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+          return SlideTransition(position: animation.drive(tween), child: child);
+        },
+      ),
+    ),
+    GoRoute(
+      path: '/notifications',
+      pageBuilder: (context, state) => CustomTransitionPage(
+        key: state.pageKey,
+        child: const NotificationsScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(1.0, 0.0);
           const end = Offset.zero;

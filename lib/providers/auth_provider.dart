@@ -337,6 +337,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState();
   }
 
+  /// Permanently deletes the current user account and every piece of
+  /// data that belongs to them (contacts, reminders, interactions,
+  /// payment methods). Clears the session afterwards.
+  ///
+  /// Returns `null` on success, or an error string on failure.
+  Future<String?> deleteAccount() async {
+    final user = StorageService.currentUser;
+    if (user == null) return 'Aucun utilisateur connecté';
+    try {
+      await DatabaseService.deleteUserAndAllData(user.id);
+      await StorageService.clearSession();
+      state = const AuthState();
+      return null;
+    } catch (e) {
+      return 'Erreur lors de la suppression : $e';
+    }
+  }
+
   // ---------------- Change password ----------------
 
   /// Changes the user's password and rotates the session token.

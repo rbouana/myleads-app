@@ -837,6 +837,27 @@ class DatabaseService {
   }
 
   // =====================================================================
+  // Account deletion
+  // =====================================================================
+
+  /// Permanently erases every row owned by [userId] (contacts, their
+  /// interactions, reminders, payment methods) and then the user row
+  /// itself. Runs inside a single transaction so an interruption leaves
+  /// the DB in a consistent state.
+  static Future<void> deleteUserAndAllData(String userId) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn
+          .delete('interactions', where: 'owner_id = ?', whereArgs: [userId]);
+      await txn.delete('contacts', where: 'owner_id = ?', whereArgs: [userId]);
+      await txn.delete('reminders', where: 'owner_id = ?', whereArgs: [userId]);
+      await txn.delete('payment_methods',
+          where: 'owner_id = ?', whereArgs: [userId]);
+      await txn.delete('users', where: 'id = ?', whereArgs: [userId]);
+    });
+  }
+
+  // =====================================================================
   // Helpers
   // =====================================================================
 
