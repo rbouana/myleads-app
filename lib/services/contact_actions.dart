@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/utils/validators.dart';
 import '../models/contact.dart';
+import 'action_tracker.dart';
 
 /// Centralized actions for interacting with a contact:
 /// call, SMS, WhatsApp, email, share.
@@ -21,6 +22,7 @@ class ContactActions {
       return false;
     }
     final uri = Uri(scheme: 'tel', path: _cleanPhone(contact.phone!));
+    ActionTracker.markPendingAction(contact.id, 'call');
     return _launch(context, uri, 'Impossible d\'ouvrir l\'application Téléphone');
   }
 
@@ -31,6 +33,7 @@ class ContactActions {
       return false;
     }
     final uri = Uri(scheme: 'sms', path: _cleanPhone(contact.phone!));
+    ActionTracker.markPendingAction(contact.id, 'sms');
     return _launch(context, uri, 'Impossible d\'ouvrir l\'application SMS');
   }
 
@@ -47,6 +50,7 @@ class ContactActions {
       return false;
     }
     final uri = Uri.parse('https://wa.me/$digits');
+    ActionTracker.markPendingAction(contact.id, 'whatsapp');
     return _launch(
       context,
       uri,
@@ -65,6 +69,7 @@ class ContactActions {
       scheme: 'mailto',
       path: contact.email!.trim(),
     );
+    ActionTracker.markPendingAction(contact.id, 'email');
     return _launch(context, uri, 'Impossible d\'ouvrir l\'application Email');
   }
 

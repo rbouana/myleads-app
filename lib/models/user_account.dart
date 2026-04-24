@@ -1,7 +1,8 @@
 /// User account stored in the local SQLite database.
 ///
-/// Sensitive fields (email, names, phone, dateOfBirth) are persisted
-/// in encrypted form via [EncryptionService] before being written.
+/// Sensitive fields (email, names, phone) are persisted in encrypted
+/// form via [EncryptionService] before being written. Date of birth
+/// was removed per doc v7 — not collected.
 class UserAccount {
   final String id;
   final String email;
@@ -9,7 +10,6 @@ class UserAccount {
   final String lastName;
   final String? nickname;
   final String? phone;
-  final String? dateOfBirth;
   final String? companyName;
   final String? companyRole;
   final String? biography;
@@ -29,7 +29,6 @@ class UserAccount {
     required this.lastName,
     this.nickname,
     this.phone,
-    this.dateOfBirth,
     this.companyName,
     this.companyRole,
     this.biography,
@@ -53,7 +52,6 @@ class UserAccount {
     String? lastName,
     String? nickname,
     String? phone,
-    String? dateOfBirth,
     String? companyName,
     String? companyRole,
     String? biography,
@@ -73,7 +71,6 @@ class UserAccount {
       lastName: lastName ?? this.lastName,
       nickname: nickname ?? this.nickname,
       phone: phone ?? this.phone,
-      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       companyName: companyName ?? this.companyName,
       companyRole: companyRole ?? this.companyRole,
       biography: biography ?? this.biography,

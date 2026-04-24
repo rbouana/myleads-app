@@ -372,10 +372,66 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
           'Un contact identique (même nom et coordonnées) existe déjà');
     }
 
+    // Capture previous version BEFORE the write so we can log a diff
+    // into the interaction history (doc v7). lastContactDate changes
+    // on every logged call/sms/email so we ignore it.
+    Contact? previous;
+    try {
+      previous = state.contacts.firstWhere((c) => c.id == updated.id);
+    } catch (_) {
+      previous = null;
+    }
+
     await DatabaseService.updateContact(updated);
     final list = state.contacts.map((c) => c.id == updated.id ? updated : c).toList();
     state = state.copyWith(contacts: list);
+
+    if (previous != null) {
+      final diff = _diffContact(previous, updated);
+      if (diff.isNotEmpty) {
+        try {
+          await DatabaseService.insertInteraction(Interaction(
+            id: _uuid.v4(),
+            ownerId: ownerId,
+            contactId: updated.id,
+            type: 'edit',
+            content: 'Contact modifié: ${diff.join(' · ')}',
+          ));
+        } catch (_) {
+          // Best-effort — never block the update on audit logging.
+        }
+      }
+    }
+
     return ContactResult.success(updated);
+  }
+
+  /// Produces a human-readable list of field-level changes between two
+  /// [Contact] revisions, used for the audit interaction entry.
+  List<String> _diffContact(Contact a, Contact b) {
+    final out = <String>[];
+    void diff(String label, Object? ov, Object? nv) {
+      final ox = (ov is String) ? ov.trim() : ov;
+      final nx = (nv is String) ? nv.trim() : nv;
+      if ('$ox' == '$nx') return;
+      out.add(label);
+    }
+
+    diff('prénom', a.firstName, b.firstName);
+    diff('nom', a.lastName, b.lastName);
+    diff('fonction', a.jobTitle, b.jobTitle);
+    diff('société', a.company, b.company);
+    diff('téléphone', a.phone, b.phone);
+    diff('email', a.email, b.email);
+    diff('source', a.source, b.source);
+    diff('projet 1', a.project1, b.project1);
+    diff('budget 1', a.project1Budget, b.project1Budget);
+    diff('projet 2', a.project2, b.project2);
+    diff('budget 2', a.project2Budget, b.project2Budget);
+    diff('notes', a.notes, b.notes);
+    diff('statut', a.status, b.status);
+    diff('tags', a.tags.join(','), b.tags.join(','));
+    return out;
   }
 
   Future<void> deleteContact(String id) async {

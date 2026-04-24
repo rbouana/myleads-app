@@ -291,11 +291,13 @@ class ContactsScreen extends ConsumerWidget {
               ),
             ),
 
-            // Quick actions
+            // Quick actions — Call + SMS only (per doc v7 spec).
+            // WhatsApp lives on the contact detail screen; the list
+            // card stays minimal.
             Column(
               children: [
                 _buildMiniAction(
-                  Icons.phone,
+                  Icons.phone_rounded,
                   AppColors.success,
                   () => ContactActions.call(ctx, contact),
                 ),
@@ -304,12 +306,6 @@ class ContactsScreen extends ConsumerWidget {
                   Icons.sms_rounded,
                   AppColors.warm,
                   () => ContactActions.sms(ctx, contact),
-                ),
-                const SizedBox(height: 6),
-                _buildMiniAction(
-                  Icons.chat,
-                  const Color(0xFF25D366),
-                  () => ContactActions.whatsapp(ctx, contact),
                 ),
               ],
             ),

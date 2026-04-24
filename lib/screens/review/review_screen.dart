@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/theme/app_colors.dart';
@@ -332,13 +333,13 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      _buildQuickAction(Icons.phone, AppStrings.call, AppColors.success),
+                      _buildQuickAction(const Icon(Icons.phone, size: 20), AppStrings.call, AppColors.success),
                       const SizedBox(width: 10),
-                      _buildQuickAction(Icons.chat, AppStrings.whatsapp, const Color(0xFF25D366)),
+                      _buildQuickAction(const FaIcon(FontAwesomeIcons.whatsapp, size: 20), AppStrings.whatsapp, const Color(0xFF25D366)),
                       const SizedBox(width: 10),
-                      _buildQuickAction(Icons.email, AppStrings.emailAction, AppColors.primary),
+                      _buildQuickAction(const Icon(Icons.email, size: 20), AppStrings.emailAction, AppColors.primary),
                       const SizedBox(width: 10),
-                      _buildQuickAction(Icons.sms, AppStrings.sms, AppColors.warm),
+                      _buildQuickAction(const Icon(Icons.sms, size: 20), AppStrings.sms, AppColors.warm),
                     ],
                   ),
                   const SizedBox(height: 100),
@@ -439,7 +440,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     );
   }
 
-  Widget _buildQuickAction(IconData icon, String label, Color color) {
+  Widget _buildQuickAction(Widget icon, String label, Color color) {
     return Expanded(
       child: GestureDetector(
         onTap: () {
@@ -472,7 +473,12 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Center(
+                  child: IconTheme(
+                    data: IconThemeData(color: color, size: 20),
+                    child: icon,
+                  ),
+                ),
               ),
               const SizedBox(height: 6),
               Text(

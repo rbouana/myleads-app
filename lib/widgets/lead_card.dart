@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../core/theme/app_colors.dart';
 import '../models/contact.dart';
 import 'status_badge.dart';
@@ -300,15 +301,16 @@ class LeadCard extends StatelessWidget {
       children: [
         if (onCall != null)
           _ActionIcon(
-            icon: Icons.phone_rounded,
+            icon: const Icon(Icons.phone_rounded, size: 16),
             color: AppColors.success,
             onTap: onCall!,
             tooltip: 'Appeler',
           ),
         if (onCall != null && onWhatsApp != null) const SizedBox(height: 6),
         if (onWhatsApp != null)
+          // Official WhatsApp brand glyph via Font Awesome (per doc v7).
           _ActionIcon(
-            icon: Icons.chat_rounded,
+            icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 16),
             color: const Color(0xFF25D366),
             onTap: onWhatsApp!,
             tooltip: 'WhatsApp',
@@ -319,8 +321,12 @@ class LeadCard extends StatelessWidget {
 }
 
 /// A small circular icon button used for inline quick actions on the card.
+///
+/// [icon] is any widget — pass `Icon(...)` for Material glyphs or
+/// `FaIcon(...)` for Font Awesome brand marks. The surrounding chip
+/// re-tints it via [IconTheme] so callers don't need to set a color.
 class _ActionIcon extends StatelessWidget {
-  final IconData icon;
+  final Widget icon;
   final Color color;
   final VoidCallback onTap;
   final String tooltip;
@@ -345,10 +351,9 @@ class _ActionIcon extends StatelessWidget {
           splashColor: color.withOpacity(0.2),
           child: Padding(
             padding: const EdgeInsets.all(8),
-            child: Icon(
-              icon,
-              size: 16,
-              color: color,
+            child: IconTheme(
+              data: IconThemeData(color: color, size: 16),
+              child: icon,
             ),
           ),
         ),

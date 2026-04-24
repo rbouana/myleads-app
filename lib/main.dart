@@ -3,10 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'services/action_tracker.dart';
 import 'services/storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Attach the app-lifecycle observer used to infer completed
+  // call/SMS/WhatsApp/email actions when the user comes back after
+  // leaving the app for ≥10 s (doc v7).
+  ActionTracker.init();
 
   // System chrome calls are no-ops on web; safe to call unconditionally.
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

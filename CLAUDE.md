@@ -441,6 +441,20 @@ Use these as reference points when coordinating changes:
   upgraded to `FloatingActionButton.extended`), scanner black-screen fix
   (camera preview in card mode + 25% overlay), notifications screen, delete
   account flow, OCR enrichment, contact-detail polish.
+- **v1.0.0 doc v7** — WhatsApp removed from the contacts list card (only
+  Call + SMS remain; WhatsApp kept on the contact detail screen), official
+  WhatsApp brand glyph via `font_awesome_flutter`, date-of-birth removed
+  from profile + user model + DB payload, automatic calendar sync on
+  reminder save when priority = `important`/`very_important` (verified
+  already wired), [ActionTracker](lib/services/action_tracker.dart)
+  `WidgetsBindingObserver` that records a persisted `Interaction` when the
+  user leaves the app for ≥10 s after tapping a contact action, field-level
+  diff logging on `updateContact` (audit entry in `interactions` with
+  `type='edit'`), and a unified contact history that merges raw
+  interactions with completed reminders for that contact. Calendar sync
+  diagnostic: `add_2_calendar` is intent-based (ACTION_INSERT on Android,
+  EKEventStore on iOS) — direct Google/Outlook/Apple/Notion/Motion API sync
+  would require per-provider OAuth integration beyond this release.
 
 When the user references "doc vN", match the behaviour to the nearest anchor
 above and consult the corresponding commit (see `git log --oneline`).

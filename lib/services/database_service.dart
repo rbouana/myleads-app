@@ -18,7 +18,7 @@ import 'web_db_factory_stub.dart'
 
 /// Local SQLite database service.
 ///
-/// All sensitive PII (email, names, phone, dateOfBirth, payment info)
+/// All sensitive PII (email, names, phone, payment info)
 /// are AES-256 encrypted before being persisted. Lookup columns
 /// (email_lookup, phone_lookup) are stored as deterministic hashes
 /// for uniqueness checks while keeping the plaintext encrypted.
@@ -318,9 +318,9 @@ class DatabaseService {
         'phone_lookup': u.phone != null && u.phone!.trim().isNotEmpty
             ? _hashLookup(Validators.normalizePhone(u.phone))
             : null,
-        'date_of_birth_enc': u.dateOfBirth != null
-            ? EncryptionService.encryptText(u.dateOfBirth!)
-            : null,
+        // date_of_birth_enc column is kept in schema for v5→v6 migration
+        // compatibility but no longer written (doc v7: DoB removed).
+        'date_of_birth_enc': null,
         'company_name_enc':
             u.companyName != null ? EncryptionService.encryptText(u.companyName!) : null,
         'company_role_enc':
@@ -349,9 +349,8 @@ class DatabaseService {
       phone: row['phone_enc'] != null
           ? EncryptionService.decryptText(row['phone_enc'] as String?)
           : null,
-      dateOfBirth: row['date_of_birth_enc'] != null
-          ? EncryptionService.decryptText(row['date_of_birth_enc'] as String?)
-          : null,
+      // dateOfBirth removed per doc v7 — column left untouched for any
+      // legacy rows but no longer read into the model.
       companyName: row['company_name_enc'] != null
           ? EncryptionService.decryptText(row['company_name_enc'] as String?)
           : null,

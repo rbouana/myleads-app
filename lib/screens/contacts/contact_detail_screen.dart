@@ -2,6 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -9,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../models/contact.dart';
 import '../../models/interaction.dart';
+import '../../models/reminder.dart';
 import '../../providers/contacts_provider.dart';
 import '../../services/contact_actions.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -190,31 +192,32 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildActionBtn(
-                    icon: Icons.phone,
+                    icon: const Icon(Icons.phone, size: 22),
                     label: AppStrings.call,
                     color: AppColors.success,
                     onTap: () => ContactActions.call(context, contact),
                   ),
                   _buildActionBtn(
-                    icon: Icons.sms,
+                    icon: const Icon(Icons.sms, size: 22),
                     label: AppStrings.sms,
                     color: AppColors.primary,
                     onTap: () => ContactActions.sms(context, contact),
                   ),
                   _buildActionBtn(
-                    icon: Icons.chat,
+                    // Official WhatsApp brand glyph (Font Awesome, per doc v7).
+                    icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 22),
                     label: AppStrings.whatsapp,
                     color: const Color(0xFF25D366),
                     onTap: () => ContactActions.whatsapp(context, contact),
                   ),
                   _buildActionBtn(
-                    icon: Icons.email,
+                    icon: const Icon(Icons.email, size: 22),
                     label: AppStrings.emailAction,
                     color: AppColors.warm,
                     onTap: () => ContactActions.email(context, contact),
                   ),
                   _buildActionBtn(
-                    icon: Icons.share,
+                    icon: const Icon(Icons.share, size: 22),
                     label: 'Partager',
                     color: AppColors.accent,
                     onTap: () => ContactActions.share(context, contact),
@@ -428,14 +431,27 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 );
               },
             ),
-            // History Section
-            if (_interactions.isNotEmpty)
-              _buildSection(
+            // History Section — merge raw interactions with completed
+            // reminders linked to this contact (doc v7).
+            Builder(builder: (_) {
+              final remindersState = ref.watch(remindersProvider);
+              final doneForContact = remindersState.doneReminders
+                  .where((r) => r.contactIds.contains(contact.id))
+                  .toList();
+
+              final entries = <_HistoryEntry>[
+                ..._interactions.map(_HistoryEntry.fromInteraction),
+                ...doneForContact.map(_HistoryEntry.fromReminder),
+              ]..sort((a, b) => b.date.compareTo(a.date));
+
+              if (entries.isEmpty) return const SizedBox.shrink();
+              return _buildSection(
                 AppStrings.history,
                 Column(
-                  children: _interactions.map(_timelineItem).toList(),
+                  children: entries.map(_historyRow).toList(),
                 ),
-              ),
+              );
+            }),
 
             const SizedBox(height: 40),
           ],
@@ -484,7 +500,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildActionBtn({
-    required IconData icon,
+    required Widget icon,
     required String label,
     required Color color,
     required VoidCallback onTap,
@@ -507,7 +523,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 ),
               ],
             ),
-            child: Icon(icon, color: color, size: 22),
+            child: Center(
+              child: IconTheme(
+                data: IconThemeData(color: color, size: 22),
+                child: icon,
+              ),
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -581,20 +602,29 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     );
   }
 
-  Widget _timelineItem(Interaction interaction) {
+  Widget _historyRow(_HistoryEntry entry) {
     Color dotColor;
-    switch (interaction.type) {
-      case 'meeting':
+    switch (entry.kind) {
+      case _HistoryKind.reminderDone:
         dotColor = AppColors.accent;
         break;
-      case 'call':
-        dotColor = AppColors.success;
-        break;
-      case 'email':
-        dotColor = AppColors.warm;
-        break;
-      default:
+      case _HistoryKind.edit:
         dotColor = AppColors.primary;
+        break;
+      case _HistoryKind.interaction:
+        switch (entry.type) {
+          case 'call':
+            dotColor = AppColors.success;
+            break;
+          case 'email':
+            dotColor = AppColors.warm;
+            break;
+          case 'meeting':
+            dotColor = AppColors.accent;
+            break;
+          default:
+            dotColor = AppColors.primary;
+        }
     }
 
     return Padding(
@@ -616,14 +646,28 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Text(
+                      entry.label,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
                 Text(
-                  interaction.content,
+                  entry.content,
                   style: const TextStyle(
                       fontSize: 13, color: AppColors.textDark),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  DateFormat('dd MMM yyyy').format(interaction.createdAt),
+                  DateFormat('dd MMM yyyy HH:mm').format(entry.date),
                   style: const TextStyle(
                       fontSize: 11, color: AppColors.textLight),
                 ),
@@ -753,6 +797,48 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
       await ref.read(contactsProvider.notifier).deleteContact(contact.id);
       if (mounted) context.pop();
     }
+  }
+}
+
+/// Classifies a history row so the icon/colour and label stay consistent.
+enum _HistoryKind { interaction, reminderDone, edit }
+
+/// A unified history entry — either a persisted [Interaction] or a
+/// completed [Reminder] linked to the current contact (doc v7).
+class _HistoryEntry {
+  final _HistoryKind kind;
+  final String type;
+  final String content;
+  final String label;
+  final DateTime date;
+
+  const _HistoryEntry({
+    required this.kind,
+    required this.type,
+    required this.content,
+    required this.label,
+    required this.date,
+  });
+
+  factory _HistoryEntry.fromInteraction(Interaction i) {
+    final isEdit = i.type == 'edit';
+    return _HistoryEntry(
+      kind: isEdit ? _HistoryKind.edit : _HistoryKind.interaction,
+      type: i.type,
+      content: i.content,
+      label: isEdit ? 'MODIFICATION' : i.typeLabel.toUpperCase(),
+      date: i.createdAt,
+    );
+  }
+
+  factory _HistoryEntry.fromReminder(Reminder r) {
+    return _HistoryEntry(
+      kind: _HistoryKind.reminderDone,
+      type: 'reminder',
+      content: r.note,
+      label: 'RAPPEL TERMINÉ',
+      date: r.sortKey,
+    );
   }
 }
 

@@ -192,7 +192,6 @@ class AppStrings {
   static const String profileUpdated = 'Profil mis à jour';
   static const String viewMode = 'Consulter';
   static const String editMode = 'Modifier';
-  static const String dateOfBirth = 'Date de naissance';
   static const String phoneNumber = 'Téléphone';
 
   // My Profile extended
